@@ -1,5 +1,3 @@
-import { parse as parseHTML } from "node-html-parser";
-
 const UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -100,96 +98,29 @@ export class NoteClient {
 		const collected: NoteRef[] = [];
 		const seen = new Set<string>();
 
-		for (const candidate of [
-			"https://note.com/api/v1/purchased_notes",
-			"https://note.com/api/v2/purchased_notes",
-			"https://note.com/api/v3/purchased_notes",
-			"https://note.com/api/v1/users/me/purchased_contents",
-			"https://note.com/api/v2/users/me/purchased_contents",
-		]) {
-			try {
-				let page = 1;
-				while (page <= 50) {
-					const url = `${candidate}?page=${page}`;
-					const j = await this.getJSON<{
-						data?: {
-							notes?: Array<Record<string, unknown>>;
-							contents?: Array<Record<string, unknown>>;
-							last_page?: boolean;
-							is_last_page?: boolean;
-						};
-					}>(url);
-					const items = j.data?.notes ?? j.data?.contents ?? [];
-					if (items.length === 0) break;
-					let added = 0;
-					for (const it of items) {
-						const ref = toRef(it);
-						if (ref && !seen.has(ref.key)) {
-							seen.add(ref.key);
-							collected.push(ref);
-							added++;
-						}
-					}
-					console.log(
-						`[api] ${candidate} page=${page} +${added} (total ${collected.length})`,
-					);
-					const last = j.data?.last_page ?? j.data?.is_last_page ?? false;
-					if (last) break;
-					page++;
+		const endpoint =
+			"https://note.com/api/v3/payments/purchase_notes?note_intro_only=true";
+		let page = 1;
+		while (page <= 200) {
+			const url = `${endpoint}&page=${page}`;
+			const j = await this.getJSON<{ data?: Array<Record<string, unknown>> }>(
+				url,
+			);
+			const items = Array.isArray(j.data) ? j.data : [];
+			if (items.length === 0) break;
+			let added = 0;
+			for (const it of items) {
+				const ref = toRef(it);
+				if (ref && !seen.has(ref.key)) {
+					seen.add(ref.key);
+					collected.push(ref);
+					added++;
 				}
-				if (collected.length > 0) return collected;
-			} catch (e) {
-				console.warn(`[api] ${candidate} 失敗: ${(e as Error).message}`);
 			}
+			console.log(`[api] page=${page} +${added} (total ${collected.length})`);
+			page++;
 		}
-
-		console.warn(
-			"[api] 公式APIで購入済み一覧が取れなかったため、ライブラリページのHTMLを解析します。",
-		);
-		return await this.fetchPurchasedFromLibraryHTML();
-	}
-
-	private async fetchPurchasedFromLibraryHTML(): Promise<NoteRef[]> {
-		const candidates = [
-			"https://note.com/library/purchased",
-			"https://note.com/library",
-			"https://note.com/mypage/purchased",
-			"https://note.com/settings/purchased",
-		];
-		for (const url of candidates) {
-			try {
-				const html = await this.getText(url);
-				const root = parseHTML(html);
-				const anchors = root.querySelectorAll("a");
-				const found = new Map<string, NoteRef>();
-				for (const a of anchors) {
-					const href = a.getAttribute("href") ?? "";
-					const m = href.match(/\/(?:[^/]+)?\/?n\/([a-z0-9]{8,})/i);
-					if (!m) continue;
-					const key = m[1];
-					if (!key) continue;
-					const fullUrl = href.startsWith("http")
-						? href
-						: `https://note.com${href}`;
-					const title = a.text.trim();
-					if (!found.has(key)) {
-						found.set(key, {
-							key,
-							url: fullUrl,
-							title: title || undefined,
-							creatorUrlname: undefined,
-						});
-					}
-				}
-				if (found.size > 0) {
-					console.log(`[api] library HTML (${url}) から ${found.size} 件抽出`);
-					return [...found.values()];
-				}
-			} catch (e) {
-				console.warn(`[api] ${url} 失敗: ${(e as Error).message}`);
-			}
-		}
-		return [];
+		return collected;
 	}
 }
 
