@@ -1,44 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { z } from "zod";
+import { type Config, ConfigSchema, type Format, type Mode } from "./schemas";
+
+export type { Config, Format, Mode };
 
 /**
- * @description 取得対象の決め方
+ * @description .env を行単位パースして process.env に流し込む (dotenv 非依存)
+ *   既に環境変数として存在するキーは上書きしない
  */
-export type Mode = "auto" | "file" | "args";
-
-/**
- * @description 出力フォーマット
- */
-export type Format = "md" | "html" | "both";
-
-/**
- * @description 実行時設定
- * @property cookie - note.com の Cookie ヘッダ全体
- * @property outDir - 出力ルート
- * @property concurrency - 並行ダンプ数
- * @property requestDelayMs - HTTP リクエスト間ディレイ
- * @property mode - 取得対象の決め方
- * @property urlsFile - file モード時の URL リストパス
- * @property limit - 先頭 N 件に絞る @optional
- * @property positional - args モードで渡された URL/key 列
- * @property format - 出力フォーマット @defaultValue 'md'
- * @property youtubeDl - YouTube 埋め込みを yt-dlp で DL するか @defaultValue false
- * @property cdpUrl - CDP ベース URL (html モードで使用) @defaultValue 'http://localhost:9222'
- */
-export interface Config {
-	cookie: string;
-	outDir: string;
-	concurrency: number;
-	requestDelayMs: number;
-	mode: Mode;
-	urlsFile: string;
-	limit: number | undefined;
-	positional: string[];
-	format: Format;
-	youtubeDl: boolean;
-	cdpUrl: string;
-}
-
 function loadDotenv(path: string): void {
 	if (!existsSync(path)) return;
 	const text = readFileSync(path, "utf8");
@@ -62,16 +32,8 @@ function loadDotenv(path: string): void {
 }
 
 /**
- * @description 数値フラグを厳密にパースして NaN を即座に弾く
+ * @description --key=value / --flag 形式の argv を分解する
  */
-function parseIntOrThrow(value: string, name: string): number {
-	const n = Number(value);
-	if (!Number.isFinite(n)) {
-		throw new Error(`--${name} は数値で指定してください: ${value}`);
-	}
-	return n;
-}
-
 function parseArgs(argv: string[]): {
 	flags: Record<string, string>;
 	positional: string[];
@@ -93,60 +55,47 @@ function parseArgs(argv: string[]): {
 	return { flags, positional };
 }
 
+/**
+ * @description zod のエラーを CLI 向けに整形する
+ */
+function formatZodError(err: z.ZodError): string {
+	return err.issues
+		.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+		.join("\n");
+}
+
+/**
+ * @description CLI 引数 + 環境変数から Config を組み立てて zod で検証
+ *   フラグ > 環境変数 > 既定値 の優先順
+ */
 export function loadConfig(argv: string[]): Config {
 	loadDotenv(resolve(process.cwd(), ".env"));
 	const { flags, positional } = parseArgs(argv);
 
-	const cookie = process.env.NOTE_COOKIE ?? "";
-	if (cookie === "") {
-		throw new Error(
-			"NOTE_COOKIE が未設定。.env を作成して note.com の Cookie を設定してください。",
-		);
-	}
+	const explicitMode = flags.mode;
+	const inferredMode =
+		explicitMode ?? (positional.length > 0 ? "args" : "auto");
 
-	const outDir = resolve(flags.out ?? process.env.OUT_DIR ?? "./out");
-	const concurrency = parseIntOrThrow(
-		flags.concurrency ?? process.env.CONCURRENCY ?? "2",
-		"concurrency",
-	);
-	const requestDelayMs = parseIntOrThrow(
-		flags.delay ?? process.env.REQUEST_DELAY_MS ?? "600",
-		"delay",
-	);
-	const explicitMode = flags.mode as Mode | undefined;
-	const mode: Mode = explicitMode ?? (positional.length > 0 ? "args" : "auto");
-	if (mode !== "auto" && mode !== "file" && mode !== "args") {
-		throw new Error(`不明なモード: ${mode}`);
-	}
-	const urlsFile = resolve(flags.urls ?? "./urls.txt");
-	const limit =
-		flags.limit !== undefined ? parseIntOrThrow(flags.limit, "limit") : undefined;
-
-	const formatRaw = flags.format ?? process.env.FORMAT ?? "md";
-	if (formatRaw !== "md" && formatRaw !== "html" && formatRaw !== "both") {
-		throw new Error(`不明な --format: ${formatRaw} (md|html|both)`);
-	}
-	const format: Format = formatRaw;
-
-	const youtubeDl =
-		flags["youtube-dl"] === "true" ||
-		flags.youtubeDl === "true" ||
-		process.env.YOUTUBE_DL === "true";
-
-	const cdpUrl =
-		flags["cdp-url"] ?? process.env.CDP_URL ?? "http://localhost:9222";
-
-	return {
-		cookie,
-		outDir,
-		concurrency,
-		requestDelayMs,
-		mode,
-		urlsFile,
-		limit,
+	const raw = {
+		cookie: process.env.NOTE_COOKIE ?? "",
+		outDir: resolve(flags.out ?? process.env.OUT_DIR ?? "./out"),
+		concurrency: flags.concurrency ?? process.env.CONCURRENCY ?? "2",
+		requestDelayMs: flags.delay ?? process.env.REQUEST_DELAY_MS ?? "600",
+		mode: inferredMode,
+		urlsFile: resolve(flags.urls ?? "./urls.txt"),
+		limit: flags.limit,
 		positional,
-		format,
-		youtubeDl,
-		cdpUrl,
+		format: flags.format ?? process.env.FORMAT ?? "md",
+		youtubeDl:
+			flags["youtube-dl"] === "true" ||
+			flags.youtubeDl === "true" ||
+			process.env.YOUTUBE_DL === "true",
+		cdpUrl: flags["cdp-url"] ?? process.env.CDP_URL ?? "http://localhost:9222",
 	};
+
+	const parsed = ConfigSchema.safeParse(raw);
+	if (!parsed.success) {
+		throw new Error(`設定が不正です:\n${formatZodError(parsed.error)}`);
+	}
+	return parsed.data;
 }

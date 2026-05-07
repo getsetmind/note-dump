@@ -1,3 +1,9 @@
+import {
+	NoteDetailResponseSchema,
+	PurchasedItemSchema,
+	PurchasedListResponseSchema,
+} from "./schemas";
+
 /**
  * @description note.com に送る User-Agent
  */
@@ -9,6 +15,13 @@ const UA =
  */
 const MAX_PURCHASE_PAGES = 200;
 
+/**
+ * @description 一覧取得時の最小情報
+ * @property key - note key
+ * @property url - 記事 URL
+ * @property title - 記事タイトル @optional
+ * @property creatorUrlname - 著者 urlname @optional
+ */
 export interface NoteRef {
 	key: string;
 	url: string;
@@ -16,6 +29,10 @@ export interface NoteRef {
 	creatorUrlname: string | undefined;
 }
 
+/**
+ * @description 詳細 API から正規化した記事データ
+ * @property raw - 元の API レスポンス全体 (meta.json 出力用)
+ */
 export interface NoteDetail {
 	key: string;
 	name: string;
@@ -27,6 +44,9 @@ export interface NoteDetail {
 	raw: unknown;
 }
 
+/**
+ * @description Cookie 付き fetch + 直列スロットリング + zod 検証を担う薄いクライアント
+ */
 export class NoteClient {
 	private readonly cookie: string;
 	private readonly delayMs: number;
@@ -37,6 +57,9 @@ export class NoteClient {
 		this.delayMs = delayMs;
 	}
 
+	/**
+	 * @description 直前リクエストから delayMs 経過するまで待つ
+	 */
 	private async throttle(): Promise<void> {
 		const now = Date.now();
 		const wait = this.lastAt + this.delayMs - now;
@@ -44,6 +67,9 @@ export class NoteClient {
 		this.lastAt = Date.now();
 	}
 
+	/**
+	 * @description Cookie/UA/Referer 付きで GET してテキストを返す
+	 */
 	async getText(
 		url: string,
 		accept = "text/html,application/json",
@@ -65,11 +91,17 @@ export class NoteClient {
 		return await res.text();
 	}
 
+	/**
+	 * @description JSON を取得 (型は呼び出し側で zod 検証する想定)
+	 */
 	async getJSON<T>(url: string): Promise<T> {
 		const text = await this.getText(url, "application/json");
 		return JSON.parse(text) as T;
 	}
 
+	/**
+	 * @description 画像など Cookie 不要なバイナリを取得する
+	 */
 	async fetchBinary(url: string): Promise<{ buf: ArrayBuffer; type: string }> {
 		await this.throttle();
 		const res = await fetch(url, {
@@ -84,24 +116,39 @@ export class NoteClient {
 		return { buf, type };
 	}
 
+	/**
+	 * @description 記事詳細を取得して NoteDetail に正規化する
+	 *   スキーマ不一致時は zod のエラーメッセージごと throw
+	 */
 	async fetchNote(key: string): Promise<NoteDetail> {
 		const url = `https://note.com/api/v3/notes/${key}`;
-		const j = (await this.getJSON<{ data: Record<string, unknown> }>(url)).data;
-		const user = j.user as { urlname?: string; nickname?: string } | undefined;
+		const json = await this.getJSON<unknown>(url);
+		const parsed = NoteDetailResponseSchema.safeParse(json);
+		if (!parsed.success) {
+			throw new Error(
+				`[api] note ${key} のレスポンスが想定と異なる: ${parsed.error.message}`,
+			);
+		}
+		const j = parsed.data.data;
+		const user = j.user;
 		return {
-			key: String(j.key ?? key),
-			name: String(j.name ?? ""),
-			body: String(j.body ?? ""),
-			createdAt: j.created_at ? String(j.created_at) : undefined,
-			publishAt: j.publish_at ? String(j.publish_at) : undefined,
+			key: j.key ?? key,
+			name: j.name ?? "",
+			body: j.body ?? "",
+			createdAt: j.created_at,
+			publishAt: j.publish_at,
 			user: user?.urlname
 				? { urlname: user.urlname, nickname: user.nickname ?? "" }
 				: undefined,
-			priceText: j.price ? String(j.price) : undefined,
+			priceText: j.price !== undefined ? String(j.price) : undefined,
 			raw: j,
 		};
 	}
 
+	/**
+	 * @description 購入済み一覧を全ページ取得する
+	 *   1 件ごとに zod 検証し、不正アイテムは warn でスキップして継続する
+	 */
 	async fetchPurchasedKeys(): Promise<NoteRef[]> {
 		const collected: NoteRef[] = [];
 		const seen = new Set<string>();
@@ -111,47 +158,66 @@ export class NoteClient {
 		let page = 1;
 		while (page <= MAX_PURCHASE_PAGES) {
 			const url = `${endpoint}&page=${page}`;
-			const j = await this.getJSON<{ data?: Array<Record<string, unknown>> }>(
-				url,
-			);
-			const items = Array.isArray(j.data) ? j.data : [];
+			const json = await this.getJSON<unknown>(url);
+			const parsed = PurchasedListResponseSchema.safeParse(json);
+			if (!parsed.success) {
+				console.warn(
+					`[api] page=${page} のレスポンス形が不正のため打ち切り: ${parsed.error.message}`,
+				);
+				break;
+			}
+			const items = parsed.data.data ?? [];
 			if (items.length === 0) break;
 			let added = 0;
+			let skipped = 0;
 			for (const it of items) {
-				const ref = toRef(it);
-				if (ref && !seen.has(ref.key)) {
+				const ref = parseRef(it);
+				if (!ref) {
+					skipped++;
+					continue;
+				}
+				if (!seen.has(ref.key)) {
 					seen.add(ref.key);
 					collected.push(ref);
 					added++;
 				}
 			}
-			console.log(`[api] page=${page} +${added} (total ${collected.length})`);
+			const skipNote = skipped > 0 ? ` (skip ${skipped})` : "";
+			console.log(
+				`[api] page=${page} +${added}${skipNote} (total ${collected.length})`,
+			);
 			page++;
 		}
 		return collected;
 	}
 }
 
-function toRef(it: Record<string, unknown>): NoteRef | undefined {
-	const note = (it.note as Record<string, unknown> | undefined) ?? it;
-	const key = note.key;
-	if (typeof key !== "string") return undefined;
-	const user = note.user as { urlname?: string } | undefined;
-	const urlname = user?.urlname;
+/**
+ * @description 購入済み 1 アイテムを zod でパースして NoteRef に正規化
+ *   検証失敗時は undefined を返してスキップ判断は呼び出し側に委ねる
+ */
+function parseRef(item: unknown): NoteRef | undefined {
+	const parsed = PurchasedItemSchema.safeParse(item);
+	if (!parsed.success) return undefined;
+	const note = parsed.data;
+	const urlname = note.user?.urlname;
 	const url =
-		typeof note.note_url === "string"
-			? (note.note_url as string)
-			: urlname
-				? `https://note.com/${urlname}/n/${key}`
-				: `https://note.com/n/${key}`;
+		note.note_url ??
+		(urlname
+			? `https://note.com/${urlname}/n/${note.key}`
+			: `https://note.com/n/${note.key}`);
 	return {
-		key,
+		key: note.key,
 		url,
-		title: typeof note.name === "string" ? (note.name as string) : undefined,
+		title: note.name,
 		creatorUrlname: urlname,
 	};
 }
 
+/**
+ * @description URL or note key 文字列から key を抽出する
+ *   解釈不能な場合は undefined
+ */
 export function parseUrlOrKey(s: string): string | undefined {
 	const trimmed = s.trim();
 	if (trimmed === "") return undefined;
