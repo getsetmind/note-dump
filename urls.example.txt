@@ -1,0 +1,5 @@
+# --mode=file のとき読み込まれる。1行1URL。# で始まる行はコメント。
+# 形式は以下のどれでも可:
+#   https://note.com/<creator>/n/<noteKey>
+#   https://note.com/n/<noteKey>
+#   <noteKey>          (例: nabcd1234ef56)
