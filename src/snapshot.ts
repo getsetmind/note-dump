@@ -215,8 +215,8 @@ export async function captureRenderedHtml(
 	} finally {
 		try {
 			if (targetId) await sess.send("Target.closeTarget", { targetId });
-		} catch {
-			// 後始末失敗は握り潰す
+		} catch (e) {
+			console.warn(`  [snapshot] target close 失敗: ${(e as Error).message}`);
 		}
 		sess.close();
 	}

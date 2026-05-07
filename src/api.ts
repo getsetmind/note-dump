@@ -1,5 +1,13 @@
+/**
+ * @description note.com に送る User-Agent
+ */
 const UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+/**
+ * @description 購入済み API のページング上限。暴走防止のため
+ */
+const MAX_PURCHASE_PAGES = 200;
 
 export interface NoteRef {
 	key: string;
@@ -101,7 +109,7 @@ export class NoteClient {
 		const endpoint =
 			"https://note.com/api/v3/payments/purchase_notes?note_intro_only=true";
 		let page = 1;
-		while (page <= 200) {
+		while (page <= MAX_PURCHASE_PAGES) {
 			const url = `${endpoint}&page=${page}`;
 			const j = await this.getJSON<{ data?: Array<Record<string, unknown>> }>(
 				url,

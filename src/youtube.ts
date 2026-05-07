@@ -75,20 +75,25 @@ function normalizeYoutube(url: string): string {
 	return url;
 }
 
+let ytDlpAvailableCache: boolean | undefined;
+
 /**
  * @description yt-dlp が PATH に居るかチェック (Bun.spawn で Windows .cmd shim も直接解決)
+ *  記事ごとに呼ばれるためプロセス内で一度だけ判定して結果を再利用する
  */
 async function ytDlpAvailable(): Promise<boolean> {
+	if (ytDlpAvailableCache !== undefined) return ytDlpAvailableCache;
 	try {
 		const p = Bun.spawn(["yt-dlp", "--version"], {
 			stdout: "ignore",
 			stderr: "ignore",
 		});
 		const code = await p.exited;
-		return code === 0;
+		ytDlpAvailableCache = code === 0;
 	} catch {
-		return false;
+		ytDlpAvailableCache = false;
 	}
+	return ytDlpAvailableCache;
 }
 
 /**

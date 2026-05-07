@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NoteClient, type NoteRef, parseUrlOrKey } from "./api";
@@ -12,12 +12,29 @@ import {
 	rewriteYoutubeEmbedsToLocal,
 } from "./youtube";
 
+/**
+ * @description ファイル名に使えない文字を除去して 80 文字に丸める
+ */
 function sanitizeFilename(s: string): string {
 	return s
 		.replace(/[\\/:*?"<>|]/g, "_")
 		.replace(/\s+/g, " ")
 		.trim()
 		.slice(0, 80);
+}
+
+/**
+ * @description URL or note key 文字列から NoteRef を組み立てる。解釈できなければ undefined
+ */
+function refFromInput(input: string): NoteRef | undefined {
+	const key = parseUrlOrKey(input);
+	if (!key) return undefined;
+	return {
+		key,
+		url: input.startsWith("http") ? input : `https://note.com/n/${key}`,
+		title: undefined,
+		creatorUrlname: undefined,
+	};
 }
 
 async function dumpOne(
@@ -33,12 +50,15 @@ async function dumpOne(
 	const wantMd = cfg.format === "md" || cfg.format === "both";
 	const wantHtml = cfg.format === "html" || cfg.format === "both";
 
+	const imageCache = new Map<string, string>();
+
 	let imageCount = 0;
 	if (wantMd) {
 		const { html, count } = await downloadImagesAndRewrite(
 			detail.body,
 			join(dir, "images"),
 			client,
+			imageCache,
 		);
 		imageCount = count;
 
@@ -89,11 +109,11 @@ async function dumpOne(
 			: ref.url;
 		try {
 			const captured = await captureRenderedHtml(cfg.cdpUrl, articleUrl);
-			// downloadImagesAndRewrite で <img> を images/ にローカル化 (md と共有)
 			const r = await downloadImagesAndRewrite(
 				captured,
 				join(dir, "images"),
 				client,
+				imageCache,
 			);
 			let finalHtml = r.html;
 			if (cfg.youtubeDl) {
@@ -138,26 +158,30 @@ async function runWithConcurrency<T>(
 	await Promise.all(runners);
 }
 
+/**
+ * @description urls.txt をパースして NoteRef 列にする。空行と '#' コメントは無視
+ */
 function readUrlsFile(path: string): NoteRef[] {
-	if (!existsSync(path)) {
-		throw new Error(`urls ファイルが見つからない: ${path}`);
+	let text: string;
+	try {
+		text = readFileSync(path, "utf8");
+	} catch (e) {
+		const code = (e as NodeJS.ErrnoException).code;
+		if (code === "ENOENT") {
+			throw new Error(`urls ファイルが見つからない: ${path}`);
+		}
+		throw e;
 	}
-	const lines = readFileSync(path, "utf8").split(/\r?\n/);
 	const refs: NoteRef[] = [];
-	for (const raw of lines) {
+	for (const raw of text.split(/\r?\n/)) {
 		const line = raw.trim();
 		if (line === "" || line.startsWith("#")) continue;
-		const key = parseUrlOrKey(line);
-		if (!key) {
+		const ref = refFromInput(line);
+		if (!ref) {
 			console.warn(`[dump] 無視: ${line}`);
 			continue;
 		}
-		refs.push({
-			key,
-			url: line.startsWith("http") ? line : `https://note.com/n/${key}`,
-			title: undefined,
-			creatorUrlname: undefined,
-		});
+		refs.push(ref);
 	}
 	return refs;
 }
@@ -171,17 +195,12 @@ async function main(): Promise<void> {
 	if (cfg.mode === "args") {
 		refs = [];
 		for (const a of cfg.positional) {
-			const key = parseUrlOrKey(a);
-			if (!key) {
+			const ref = refFromInput(a);
+			if (!ref) {
 				console.warn(`[dump] 無視 (URL/key として解釈不能): ${a}`);
 				continue;
 			}
-			refs.push({
-				key,
-				url: a.startsWith("http") ? a : `https://note.com/n/${key}`,
-				title: undefined,
-				creatorUrlname: undefined,
-			});
+			refs.push(ref);
 		}
 		console.log(`[dump] args モード: ${refs.length} 件`);
 	} else if (cfg.mode === "file") {

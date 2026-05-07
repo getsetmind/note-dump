@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { parse as parseHTML } from "node-html-parser";
 import TurndownService from "turndown";
 import type { NoteClient } from "./api";
 
-export interface RenderResult {
-	markdown: string;
-	imageCount: number;
-}
-
+/**
+ * @description MIME から拡張子へのフォールバックマップ
+ */
 const EXT_BY_MIME: Record<string, string> = {
 	"image/jpeg": ".jpg",
 	"image/png": ".png",
@@ -30,19 +28,25 @@ function shortHash(s: string): string {
 	return createHash("sha1").update(s).digest("hex").slice(0, 10);
 }
 
+/**
+ * @description 本文 HTML 内の画像を DL してローカル参照に書き換える
+ * @param bodyHtml - 入力 HTML
+ * @param imageDir - 画像を書き出すディレクトリ
+ * @param client - 認証付き fetch クライアント
+ * @param cache - 同一記事内で複数回呼ぶ場合の URL -> filename キャッシュ @optional
+ */
 export async function downloadImagesAndRewrite(
 	bodyHtml: string,
 	imageDir: string,
 	client: NoteClient,
+	cache?: Map<string, string>,
 ): Promise<{ html: string; count: number }> {
 	const root = parseHTML(bodyHtml);
 	const imgs = root.querySelectorAll("img");
 	let count = 0;
-
-	await mkdir(imageDir, { recursive: true });
+	let dirReady = false;
 
 	for (const img of imgs) {
-		// data:placeholder のときは data-src を優先 (note.com の lazy-load 対策)
 		const rawSrc = img.getAttribute("src");
 		const dataSrc =
 			img.getAttribute("data-src") ?? img.getAttribute("data-original-src");
@@ -51,14 +55,29 @@ export async function downloadImagesAndRewrite(
 		if (!src || src.startsWith("data:")) continue;
 
 		const absUrl = src.startsWith("http") ? src : `https:${src}`;
+
+		const cached = cache?.get(absUrl);
+		if (cached) {
+			img.setAttribute("src", `images/${cached}`);
+			img.removeAttribute("data-src");
+			img.removeAttribute("srcset");
+			count++;
+			continue;
+		}
+
 		try {
 			const { buf, type } = await client.fetchBinary(absUrl);
 			const ext = extFor(absUrl, type);
 			const filename = `${shortHash(absUrl)}${ext}`;
-			await writeFile(join(imageDir, filename), Buffer.from(buf));
+			if (!dirReady) {
+				await mkdir(imageDir, { recursive: true });
+				dirReady = true;
+			}
+			await Bun.write(join(imageDir, filename), buf);
 			img.setAttribute("src", `images/${filename}`);
 			img.removeAttribute("data-src");
 			img.removeAttribute("srcset");
+			cache?.set(absUrl, filename);
 			count++;
 		} catch (e) {
 			console.warn(`  [img] ${absUrl} 失敗: ${(e as Error).message}`);

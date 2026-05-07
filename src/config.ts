@@ -61,6 +61,17 @@ function loadDotenv(path: string): void {
 	}
 }
 
+/**
+ * @description 数値フラグを厳密にパースして NaN を即座に弾く
+ */
+function parseIntOrThrow(value: string, name: string): number {
+	const n = Number(value);
+	if (!Number.isFinite(n)) {
+		throw new Error(`--${name} は数値で指定してください: ${value}`);
+	}
+	return n;
+}
+
 function parseArgs(argv: string[]): {
 	flags: Record<string, string>;
 	positional: string[];
@@ -94,9 +105,13 @@ export function loadConfig(argv: string[]): Config {
 	}
 
 	const outDir = resolve(flags.out ?? process.env.OUT_DIR ?? "./out");
-	const concurrency = Number(flags.concurrency ?? process.env.CONCURRENCY ?? 2);
-	const requestDelayMs = Number(
-		flags.delay ?? process.env.REQUEST_DELAY_MS ?? 600,
+	const concurrency = parseIntOrThrow(
+		flags.concurrency ?? process.env.CONCURRENCY ?? "2",
+		"concurrency",
+	);
+	const requestDelayMs = parseIntOrThrow(
+		flags.delay ?? process.env.REQUEST_DELAY_MS ?? "600",
+		"delay",
 	);
 	const explicitMode = flags.mode as Mode | undefined;
 	const mode: Mode = explicitMode ?? (positional.length > 0 ? "args" : "auto");
@@ -104,7 +119,8 @@ export function loadConfig(argv: string[]): Config {
 		throw new Error(`不明なモード: ${mode}`);
 	}
 	const urlsFile = resolve(flags.urls ?? "./urls.txt");
-	const limit = flags.limit !== undefined ? Number(flags.limit) : undefined;
+	const limit =
+		flags.limit !== undefined ? parseIntOrThrow(flags.limit, "limit") : undefined;
 
 	const formatRaw = flags.format ?? process.env.FORMAT ?? "md";
 	if (formatRaw !== "md" && formatRaw !== "html" && formatRaw !== "both") {
