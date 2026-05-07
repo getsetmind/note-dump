@@ -5,7 +5,12 @@ import { NoteClient, type NoteRef, parseUrlOrKey } from "./api";
 import { type Config, loadConfig } from "./config";
 import { downloadImagesAndRewrite, htmlToMarkdown } from "./markdown";
 import { captureRenderedHtml } from "./snapshot";
-import { downloadYoutubeAll, extractYoutubeUrls } from "./youtube";
+import {
+	buildLocalVideoMap,
+	downloadYoutubeAll,
+	extractYoutubeUrls,
+	rewriteYoutubeEmbedsToLocal,
+} from "./youtube";
 
 function sanitizeFilename(s: string): string {
 	return s
@@ -66,6 +71,15 @@ async function dumpOne(
 		"utf8",
 	);
 
+	// HTML 内で YouTube 埋め込みをローカル動画に差し替えるため、html 出力より先に DL する
+	let ytCount = 0;
+	if (cfg.youtubeDl) {
+		const urls = extractYoutubeUrls(detail.body);
+		if (urls.length > 0) {
+			ytCount = await downloadYoutubeAll(urls, join(dir, "videos"));
+		}
+	}
+
 	let htmlOk = false;
 	let htmlImages = 0;
 	if (wantHtml) {
@@ -81,19 +95,16 @@ async function dumpOne(
 				join(dir, "images"),
 				client,
 			);
-			await writeFile(join(dir, "page.html"), r.html, "utf8");
+			let finalHtml = r.html;
+			if (cfg.youtubeDl) {
+				const map = await buildLocalVideoMap(join(dir, "videos"));
+				finalHtml = rewriteYoutubeEmbedsToLocal(finalHtml, "videos", map);
+			}
+			await writeFile(join(dir, "page.html"), finalHtml, "utf8");
 			htmlImages = r.count;
 			htmlOk = true;
 		} catch (e) {
 			console.warn(`  [snapshot] 失敗: ${(e as Error).message}`);
-		}
-	}
-
-	let ytCount = 0;
-	if (cfg.youtubeDl) {
-		const urls = extractYoutubeUrls(detail.body);
-		if (urls.length > 0) {
-			ytCount = await downloadYoutubeAll(urls, join(dir, "videos"));
 		}
 	}
 

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { parse as parseHTML } from "node-html-parser";
 
 /**
@@ -46,19 +46,33 @@ function isYoutube(url: string): boolean {
 }
 
 /**
+ * @description URL から YouTube 動画 ID を抽出
+ */
+export function extractYoutubeId(url: string): string | undefined {
+	try {
+		const u = new URL(url, "https://note.com");
+		const h = u.hostname.replace(/^www\./, "");
+		if (h === "youtu.be") return u.pathname.slice(1).split("/")[0] || undefined;
+		if (u.pathname.startsWith("/embed/")) {
+			return u.pathname.slice("/embed/".length).split("/")[0] || undefined;
+		}
+		if (u.pathname.startsWith("/shorts/")) {
+			return u.pathname.slice("/shorts/".length).split("/")[0] || undefined;
+		}
+		if (u.pathname === "/watch") return u.searchParams.get("v") ?? undefined;
+		return undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
  * @description /embed/<id> 形式を watch?v=<id> に正規化
  */
 function normalizeYoutube(url: string): string {
-	try {
-		const u = new URL(url, "https://note.com");
-		if (u.pathname.startsWith("/embed/")) {
-			const id = u.pathname.slice("/embed/".length).split("/")[0];
-			if (id) return `https://www.youtube.com/watch?v=${id}`;
-		}
-		return u.toString();
-	} catch {
-		return url;
-	}
+	const id = extractYoutubeId(url);
+	if (id) return `https://www.youtube.com/watch?v=${id}`;
+	return url;
 }
 
 /**
@@ -124,4 +138,69 @@ export async function downloadYoutubeAll(
 		}
 	}
 	return ok;
+}
+
+/**
+ * @description videos/ 配下のファイルから video ID → ファイル名のマップを構築
+ * @param videosDir - videos ディレクトリ絶対パス
+ * @returns ID をキー, "<id>.<ext>" を値とする Map (DL 失敗時等で空のこともある)
+ */
+export async function buildLocalVideoMap(
+	videosDir: string,
+): Promise<Map<string, string>> {
+	const map = new Map<string, string>();
+	let files: string[];
+	try {
+		files = await readdir(videosDir);
+	} catch {
+		return map;
+	}
+	for (const f of files) {
+		const dot = f.lastIndexOf(".");
+		const id = dot > 0 ? f.slice(0, dot) : f;
+		if (id) map.set(id, f);
+	}
+	return map;
+}
+
+/**
+ * @description HTML 内の YouTube iframe/figure 埋め込みをローカル <video> + 元動画リンクに置換
+ * @param html - 入力 HTML
+ * @param videosDirRel - <video src> に書く相対パス (例: "videos")
+ * @param fileMap - buildLocalVideoMap の結果
+ * @returns 置換後 HTML (置換が無くても元 HTML を返す)
+ */
+export function rewriteYoutubeEmbedsToLocal(
+	html: string,
+	videosDirRel: string,
+	fileMap: Map<string, string>,
+): string {
+	if (fileMap.size === 0) return html;
+	const root = parseHTML(html);
+	let replaced = 0;
+
+	const swap = (id: string): string => {
+		const file = fileMap.get(id);
+		if (!file) return "";
+		const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+		return `<div class="local-yt-embed" style="margin:1em 0"><video controls preload="metadata" src="${videosDirRel}/${file}" style="max-width:100%;display:block"></video><p style="margin:.4em 0;font-size:.9em"><a href="${watchUrl}" target="_blank" rel="noopener">YouTube で開く</a></p></div>`;
+	};
+
+	for (const el of root.querySelectorAll("iframe, embed")) {
+		const src = el.getAttribute("src") ?? "";
+		const id = extractYoutubeId(src);
+		if (!id || !fileMap.has(id)) continue;
+		el.replaceWith(swap(id));
+		replaced++;
+	}
+	// note.com の <figure embedded-service="youtube" data-src="..."> も置換
+	for (const el of root.querySelectorAll('[embedded-service="youtube"]')) {
+		const src = el.getAttribute("data-src") ?? el.getAttribute("src") ?? "";
+		const id = extractYoutubeId(src);
+		if (!id || !fileMap.has(id)) continue;
+		el.replaceWith(swap(id));
+		replaced++;
+	}
+
+	return replaced > 0 ? root.toString() : html;
 }
