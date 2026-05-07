@@ -75,6 +75,9 @@ function normalizeYoutube(url: string): string {
 	return url;
 }
 
+/**
+ * @description ytDlpAvailable() の結果をプロセス内で再利用するキャッシュ
+ */
 let ytDlpAvailableCache: boolean | undefined;
 
 /**

@@ -12,9 +12,23 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+/**
+ * @description CDP の HTTP エンドポイント (Comet/Chrome の --remote-debugging-port)
+ */
 const CDP_URL = "http://localhost:9222";
+
+/**
+ * @description --print 指定時は .env を書き換えず標準出力のみ
+ */
 const PRINT_ONLY = process.argv.includes("--print");
 
+/**
+ * @description /json/list が返すターゲットエントリ
+ * @property id - ターゲット ID
+ * @property type - "page" / "background_page" など
+ * @property url - 開いている URL
+ * @property webSocketDebuggerUrl - 個別 WS デバッグ URL
+ */
 interface CdpPage {
 	id: string;
 	type: string;
@@ -22,6 +36,15 @@ interface CdpPage {
 	webSocketDebuggerUrl: string;
 }
 
+/**
+ * @description Network.getCookies が返す 1 件
+ * @property name - Cookie 名
+ * @property value - Cookie 値
+ * @property domain - スコープドメイン
+ * @property path - スコープパス
+ * @property httpOnly - JS から不可視か
+ * @property secure - HTTPS 限定か
+ */
 interface CdpCookie {
 	name: string;
 	value: string;
@@ -31,6 +54,9 @@ interface CdpCookie {
 	secure: boolean;
 }
 
+/**
+ * @description /json/list を叩いて開いているターゲット一覧を取得
+ */
 async function listPages(): Promise<CdpPage[]> {
 	const res = await fetch(`${CDP_URL}/json/list`);
 	if (!res.ok) {
@@ -41,6 +67,13 @@ async function listPages(): Promise<CdpPage[]> {
 	return (await res.json()) as CdpPage[];
 }
 
+/**
+ * @description CDP に 1 回だけ RPC を投げて結果を返す単発クライアント
+ *   src/snapshot.ts の CdpSession と違い、毎回 WS を開閉する
+ * @param wsUrl - 接続先 webSocketDebuggerUrl
+ * @param method - CDP メソッド名
+ * @param params - パラメータ
+ */
 function rpc<T>(wsUrl: string, method: string, params: object): Promise<T> {
 	return new Promise((resolveP, rejectP) => {
 		const ws = new WebSocket(wsUrl);
@@ -69,6 +102,9 @@ function rpc<T>(wsUrl: string, method: string, params: object): Promise<T> {
 	});
 }
 
+/**
+ * @description note.com スコープの Cookie を CDP 経由で全取得 (httpOnly 含む)
+ */
 async function getCookies(): Promise<CdpCookie[]> {
 	const pages = await listPages();
 	const target = pages.find((p) => p.type === "page" && p.webSocketDebuggerUrl);
@@ -85,10 +121,17 @@ async function getCookies(): Promise<CdpCookie[]> {
 	return r.cookies;
 }
 
+/**
+ * @description Cookie 配列を `name=value; ...` 形式の Cookie ヘッダ文字列に整形
+ */
 function toCookieHeader(cookies: CdpCookie[]): string {
 	return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 }
 
+/**
+ * @description .env の NOTE_COOKIE 行だけを差し替える (他の行は保持)
+ *   ファイルが無ければ新規作成する
+ */
 function upsertEnv(envPath: string, cookieHeader: string): void {
 	const line = `NOTE_COOKIE="${cookieHeader}"`;
 	if (!existsSync(envPath)) {
@@ -109,6 +152,9 @@ function upsertEnv(envPath: string, cookieHeader: string): void {
 	writeFileSync(envPath, next.join("\n"), "utf8");
 }
 
+/**
+ * @description CLI エントリ。Cookie 取得 → 必須 Cookie チェック → .env 反映
+ */
 async function main(): Promise<void> {
 	const cookies = await getCookies();
 	if (cookies.length === 0) {

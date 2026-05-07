@@ -17,6 +17,10 @@ const EXT_BY_MIME: Record<string, string> = {
 	"image/avif": ".avif",
 };
 
+/**
+ * @description URL のパス末尾と Content-Type から保存時の拡張子を決める
+ *   パス側の拡張子を優先し、無ければ MIME マップ、それも無ければ .bin
+ */
 function extFor(url: string, contentType: string): string {
 	const e = extname(new URL(url, "https://note.com").pathname).toLowerCase();
 	if (e !== "" && e.length <= 5) return e;
@@ -24,6 +28,9 @@ function extFor(url: string, contentType: string): string {
 	return EXT_BY_MIME[mime] ?? ".bin";
 }
 
+/**
+ * @description SHA-1 を 10 文字に切り詰めた短縮ハッシュ (画像ファイル名用)
+ */
 function shortHash(s: string): string {
 	return createHash("sha1").update(s).digest("hex").slice(0, 10);
 }
@@ -87,6 +94,10 @@ export async function downloadImagesAndRewrite(
 	return { html: root.toString(), count };
 }
 
+/**
+ * @description Turndown で HTML を Markdown 化
+ *   iframe/embed は `[embed](url)`、figure は前後改行で囲むカスタムルールを追加
+ */
 export function htmlToMarkdown(html: string): string {
 	const td = new TurndownService({
 		headingStyle: "atx",

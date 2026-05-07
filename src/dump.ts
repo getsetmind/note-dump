@@ -37,6 +37,12 @@ function refFromInput(input: string): NoteRef | undefined {
 	};
 }
 
+/**
+ * @description 1 記事ぶんの取得 + Markdown/HTML/動画書き出しを一括実行
+ * @param client - 認証付き API クライアント
+ * @param ref - 取得対象の記事参照
+ * @param cfg - format/youtubeDl 等の出力切り替えに使う設定
+ */
 async function dumpOne(
 	client: NoteClient,
 	ref: NoteRef,
@@ -136,6 +142,13 @@ async function dumpOne(
 	console.log(`  -> ${dir}  (${parts.join(", ")})`);
 }
 
+/**
+ * @description ワーカープール方式で worker を並列実行する
+ *   失敗は warn でスキップして残りを継続する
+ * @param items - 処理対象
+ * @param limit - 同時実行数 (1 未満は 1 として扱う)
+ * @param worker - 1 アイテムを処理するコールバック
+ */
 async function runWithConcurrency<T>(
 	items: T[],
 	limit: number,
@@ -186,6 +199,9 @@ function readUrlsFile(path: string): NoteRef[] {
 	return refs;
 }
 
+/**
+ * @description CLI エントリ。設定読み込み → 対象列挙 → 並行ダンプ
+ */
 async function main(): Promise<void> {
 	const cfg = loadConfig(process.argv.slice(2));
 	const client = new NoteClient(cfg.cookie, cfg.requestDelayMs);

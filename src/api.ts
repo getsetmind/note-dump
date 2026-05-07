@@ -31,6 +31,13 @@ export interface NoteRef {
 
 /**
  * @description 詳細 API から正規化した記事データ
+ * @property key - note key
+ * @property name - 記事タイトル
+ * @property body - 本文 HTML
+ * @property createdAt - 作成日時 ISO 文字列 @optional
+ * @property publishAt - 公開日時 ISO 文字列 @optional
+ * @property user - 著者情報 (urlname/nickname) @optional
+ * @property priceText - 価格表記 (数値/文字列を文字列に寄せたもの) @optional
  * @property raw - 元の API レスポンス全体 (meta.json 出力用)
  */
 export interface NoteDetail {
@@ -52,6 +59,10 @@ export class NoteClient {
 	private readonly delayMs: number;
 	private lastAt = 0;
 
+	/**
+	 * @param cookie - `Cookie` ヘッダにそのまま入れる文字列
+	 * @param delayMs - 直前リクエストから次リクエストまで挟む最小間隔
+	 */
 	constructor(cookie: string, delayMs: number) {
 		this.cookie = cookie;
 		this.delayMs = delayMs;

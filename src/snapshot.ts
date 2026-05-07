@@ -1,5 +1,11 @@
 /**
  * @description CDP イベント or レスポンス
+ * @property id - RPC 応答のリクエスト ID @optional
+ * @property method - イベント名 (応答時は無し) @optional
+ * @property sessionId - 紐づくセッション @optional
+ * @property params - イベントパラメータ @optional
+ * @property result - RPC 成功時の戻り値 @optional
+ * @property error - RPC 失敗時のエラー情報 @optional
  */
 interface CdpMessage {
 	id?: number;
@@ -12,6 +18,7 @@ interface CdpMessage {
 
 /**
  * @description CDP に複数 RPC を投げ、Page イベントを待てる軽量クライアント
+ *   1 WebSocket をプールして送信 ID と pending を自前管理する
  */
 class CdpSession {
 	private ws: WebSocket | null = null;
@@ -131,6 +138,9 @@ class CdpSession {
 		});
 	}
 
+	/**
+	 * @description WebSocket を閉じてセッションを破棄
+	 */
 	close(): void {
 		this.ws?.close();
 		this.ws = null;
