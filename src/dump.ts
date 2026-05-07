@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NoteClient, type NoteRef, parseUrlOrKey } from "./api";
-import { loadConfig } from "./config";
+import { type Config, loadConfig } from "./config";
 import { downloadImagesAndRewrite, htmlToMarkdown } from "./markdown";
+import { captureRenderedHtml } from "./snapshot";
+import { downloadYoutubeAll, extractYoutubeUrls } from "./youtube";
 
 function sanitizeFilename(s: string): string {
 	return s
@@ -16,46 +18,91 @@ function sanitizeFilename(s: string): string {
 async function dumpOne(
 	client: NoteClient,
 	ref: NoteRef,
-	outDir: string,
+	cfg: Config,
 ): Promise<void> {
 	const detail = await client.fetchNote(ref.key);
 	const slug = sanitizeFilename(detail.name) || detail.key;
-	const dir = join(outDir, `${detail.key}_${slug}`);
+	const dir = join(cfg.outDir, `${detail.key}_${slug}`);
 	await mkdir(dir, { recursive: true });
 
-	const { html, count } = await downloadImagesAndRewrite(
-		detail.body,
-		join(dir, "images"),
-		client,
-	);
+	const wantMd = cfg.format === "md" || cfg.format === "both";
+	const wantHtml = cfg.format === "html" || cfg.format === "both";
 
-	const fm = [
-		"---",
-		`key: ${detail.key}`,
-		`title: ${JSON.stringify(detail.name)}`,
-		`url: ${ref.url}`,
-		detail.user ? `creator: ${detail.user.urlname}` : undefined,
-		detail.user
-			? `creator_name: ${JSON.stringify(detail.user.nickname)}`
-			: undefined,
-		detail.publishAt ? `publish_at: ${detail.publishAt}` : undefined,
-		detail.createdAt ? `created_at: ${detail.createdAt}` : undefined,
-		detail.priceText ? `price: ${detail.priceText}` : undefined,
-		`dumped_at: ${new Date().toISOString()}`,
-		"---",
-		"",
-	]
-		.filter((x) => x !== undefined)
-		.join("\n");
+	let imageCount = 0;
+	if (wantMd) {
+		const { html, count } = await downloadImagesAndRewrite(
+			detail.body,
+			join(dir, "images"),
+			client,
+		);
+		imageCount = count;
 
-	const md = `${fm}# ${detail.name}\n\n${htmlToMarkdown(html)}\n`;
-	await writeFile(join(dir, "index.md"), md, "utf8");
+		const fm = [
+			"---",
+			`key: ${detail.key}`,
+			`title: ${JSON.stringify(detail.name)}`,
+			`url: ${ref.url}`,
+			detail.user ? `creator: ${detail.user.urlname}` : undefined,
+			detail.user
+				? `creator_name: ${JSON.stringify(detail.user.nickname)}`
+				: undefined,
+			detail.publishAt ? `publish_at: ${detail.publishAt}` : undefined,
+			detail.createdAt ? `created_at: ${detail.createdAt}` : undefined,
+			detail.priceText ? `price: ${detail.priceText}` : undefined,
+			`dumped_at: ${new Date().toISOString()}`,
+			"---",
+			"",
+		]
+			.filter((x) => x !== undefined)
+			.join("\n");
+
+		const md = `${fm}# ${detail.name}\n\n${htmlToMarkdown(html)}\n`;
+		await writeFile(join(dir, "index.md"), md, "utf8");
+	}
+
 	await writeFile(
 		join(dir, "meta.json"),
 		JSON.stringify(detail.raw, null, 2),
 		"utf8",
 	);
-	console.log(`  -> ${dir}  (images: ${count})`);
+
+	let htmlOk = false;
+	let htmlImages = 0;
+	if (wantHtml) {
+		// note.com/n/<key> は 404 になるため urlname 込みで再構築する
+		const articleUrl = detail.user?.urlname
+			? `https://note.com/${detail.user.urlname}/n/${detail.key}`
+			: ref.url;
+		try {
+			const captured = await captureRenderedHtml(cfg.cdpUrl, articleUrl);
+			// downloadImagesAndRewrite で <img> を images/ にローカル化 (md と共有)
+			const r = await downloadImagesAndRewrite(
+				captured,
+				join(dir, "images"),
+				client,
+			);
+			await writeFile(join(dir, "page.html"), r.html, "utf8");
+			htmlImages = r.count;
+			htmlOk = true;
+		} catch (e) {
+			console.warn(`  [snapshot] 失敗: ${(e as Error).message}`);
+		}
+	}
+
+	let ytCount = 0;
+	if (cfg.youtubeDl) {
+		const urls = extractYoutubeUrls(detail.body);
+		if (urls.length > 0) {
+			ytCount = await downloadYoutubeAll(urls, join(dir, "videos"));
+		}
+	}
+
+	const parts: string[] = [];
+	if (wantMd) parts.push(`images: ${imageCount}`);
+	if (wantHtml)
+		parts.push(`html: ${htmlOk ? `ok (+${htmlImages} img)` : "fail"}`);
+	if (cfg.youtubeDl) parts.push(`youtube: ${ytCount}`);
+	console.log(`  -> ${dir}  (${parts.join(", ")})`);
 }
 
 async function runWithConcurrency<T>(
@@ -150,7 +197,7 @@ async function main(): Promise<void> {
 	await runWithConcurrency(refs, cfg.concurrency, async (ref) => {
 		done++;
 		console.log(`[${done}/${refs.length}] ${ref.key} ${ref.title ?? ""}`);
-		await dumpOne(client, ref, cfg.outDir);
+		await dumpOne(client, ref, cfg);
 	});
 
 	console.log(`[dump] 完了。出力先: ${cfg.outDir}`);

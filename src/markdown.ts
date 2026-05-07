@@ -42,10 +42,12 @@ export async function downloadImagesAndRewrite(
 	await mkdir(imageDir, { recursive: true });
 
 	for (const img of imgs) {
+		// data:placeholder のときは data-src を優先 (note.com の lazy-load 対策)
+		const rawSrc = img.getAttribute("src");
+		const dataSrc =
+			img.getAttribute("data-src") ?? img.getAttribute("data-original-src");
 		const src =
-			img.getAttribute("src") ??
-			img.getAttribute("data-src") ??
-			img.getAttribute("data-original-src");
+			rawSrc && !rawSrc.startsWith("data:") ? rawSrc : (dataSrc ?? rawSrc);
 		if (!src || src.startsWith("data:")) continue;
 
 		const absUrl = src.startsWith("http") ? src : `https:${src}`;

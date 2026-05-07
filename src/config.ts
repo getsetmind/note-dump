@@ -1,8 +1,30 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+/**
+ * @description 取得対象の決め方
+ */
 export type Mode = "auto" | "file" | "args";
 
+/**
+ * @description 出力フォーマット
+ */
+export type Format = "md" | "html" | "both";
+
+/**
+ * @description 実行時設定
+ * @property cookie - note.com の Cookie ヘッダ全体
+ * @property outDir - 出力ルート
+ * @property concurrency - 並行ダンプ数
+ * @property requestDelayMs - HTTP リクエスト間ディレイ
+ * @property mode - 取得対象の決め方
+ * @property urlsFile - file モード時の URL リストパス
+ * @property limit - 先頭 N 件に絞る @optional
+ * @property positional - args モードで渡された URL/key 列
+ * @property format - 出力フォーマット @defaultValue 'md'
+ * @property youtubeDl - YouTube 埋め込みを yt-dlp で DL するか @defaultValue false
+ * @property cdpUrl - CDP ベース URL (html モードで使用) @defaultValue 'http://localhost:9222'
+ */
 export interface Config {
 	cookie: string;
 	outDir: string;
@@ -12,6 +34,9 @@ export interface Config {
 	urlsFile: string;
 	limit: number | undefined;
 	positional: string[];
+	format: Format;
+	youtubeDl: boolean;
+	cdpUrl: string;
 }
 
 function loadDotenv(path: string): void {
@@ -81,6 +106,20 @@ export function loadConfig(argv: string[]): Config {
 	const urlsFile = resolve(flags.urls ?? "./urls.txt");
 	const limit = flags.limit !== undefined ? Number(flags.limit) : undefined;
 
+	const formatRaw = flags.format ?? process.env.FORMAT ?? "md";
+	if (formatRaw !== "md" && formatRaw !== "html" && formatRaw !== "both") {
+		throw new Error(`不明な --format: ${formatRaw} (md|html|both)`);
+	}
+	const format: Format = formatRaw;
+
+	const youtubeDl =
+		flags["youtube-dl"] === "true" ||
+		flags.youtubeDl === "true" ||
+		process.env.YOUTUBE_DL === "true";
+
+	const cdpUrl =
+		flags["cdp-url"] ?? process.env.CDP_URL ?? "http://localhost:9222";
+
 	return {
 		cookie,
 		outDir,
@@ -90,5 +129,8 @@ export function loadConfig(argv: string[]): Config {
 		urlsFile,
 		limit,
 		positional,
+		format,
+		youtubeDl,
+		cdpUrl,
 	};
 }
