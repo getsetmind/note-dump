@@ -16,13 +16,27 @@ cp .env.example .env
 
 ### Cookie の取得
 
+#### A. CDP 自動取得 (推奨)
+
+Comet/Chrome を `--remote-debugging-port=9222` 付きで起動済みで note.com にログインしている前提:
+
+```bash
+bun run cookie:cdp
+```
+
+`_note_session_v5` (httpOnly) も含めて全 Cookie を取得し、`.env` の `NOTE_COOKIE` を自動で書き換える。
+
+#### B. 手動コピー (フォールバック)
+
+CDP が使えないとき:
+
 1. ブラウザで <https://note.com> にログインする
 2. F12 で DevTools を開き、コンソールに `scripts/get-cookie.js` の中身を貼り付けて実行
-3. クリップボードに Cookie 文字列がコピーされる
-4. `_note_session_v5` (httpOnly) は JS から取れないため、警告が出たら DevTools の
-   **Application → Cookies → `https://note.com`** から `_note_session_v5` の Value を
-   手動でコピーし、`; _note_session_v5=<value>` を末尾に追記する
-5. `.env` の `NOTE_COOKIE` に貼り付ける
+3. クリップボードに `.env` テンプレートがコピーされる
+4. `_note_session_v5` / `XSRF-TOKEN` (httpOnly) は JS から取れないので、
+   DevTools の **Application → Cookies → `https://note.com`** から手動で Value をコピーし、
+   テンプレートの `<ここに手動で貼る>` を置き換える
+5. `.env` に保存
 
 ## 使い方
 

@@ -7,6 +7,7 @@
 		"dump": "bun run src/dump.ts",
 		"dump:auto": "bun run src/dump.ts --mode=auto",
 		"dump:file": "bun run src/dump.ts --mode=file",
+		"cookie:cdp": "bun run scripts/get-cookie-cdp.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint .",
 		"format": "biome check --write --unsafe ."
