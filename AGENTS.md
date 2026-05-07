@@ -16,20 +16,20 @@ bun run lint                   # biome lint .
 bun run format                 # biome check --write --unsafe .
 ```
 
-CLI フラグ (`src/dump.ts` 経由): `--mode={auto|file}` `--out=` `--urls=` `--concurrency=` `--delay=` `--limit=`。
+CLI フラグ (`src/dump.ts` 経由): `--mode={auto|file|args}` `--out=` `--urls=` `--concurrency=` `--delay=` `--limit=`。`args` モードは positional 引数 (URL or note key) を直接渡す形で、`--mode` 省略時に positional があれば自動選択される。
 動作確認は `--limit=1` を付けて 1 件だけ流すと早い。
 
 # 必須セットアップ
 
-`.env` の `NOTE_COOKIE` がないと `loadConfig` が即 throw する。Cookie 取得は `scripts/get-cookie.js` をブラウザ DevTools コンソールで実行 → `_note_session_v5` (httpOnly のため JS から取れない) を Application タブから手動で末尾追記。詳細は README 参照。
+`.env` の `NOTE_COOKIE` がないと `loadConfig` が即 throw する。Cookie 取得は 2 通り: (a) `scripts/get-cookie.js` をブラウザ DevTools コンソールで実行 → `_note_session_v5` (httpOnly のため JS から取れない) を Application タブから手動で末尾追記、(b) `bun run cookie:cdp` (`scripts/get-cookie-cdp.ts`) で CDP 経由取得。詳細は README 参照。
 
 # アーキテクチャ
 
 エントリポイント `src/dump.ts` から 3 モジュール構成。
 
 - **`src/config.ts`** — `.env` 自前パース (dotenv 依存なし) + `--key=value` 形式の argv パース。CLI 引数が `process.env` より優先。
-- **`src/api.ts`** — `NoteClient` クラス。Cookie/UA/Referer 付き fetch + `lastAt` ベースの直列スロットリング (`throttle()`)。重要: `fetchPurchasedKeys()` は API v1/v2/v3 を順に試し、すべて失敗したら `library/purchased` 等の HTML を `node-html-parser` で解析するフォールバックチェーン。エンドポイント追加はこの配列に足すだけ。
-- **`src/markdown.ts`** — `downloadImagesAndRewrite()` で本文 HTML 内の `<img>` を全部ローカル DL し `src` を `images/<sha1先頭10>.<ext>` に書き換え → `htmlToMarkdown()` で turndown 変換。`iframe`/`embed` は `[embed](url)` に、`figure` は改行で囲むカスタムルール。
+- **`src/api.ts`** — `NoteClient` クラス。Cookie/UA/Referer 付き fetch + `lastAt` ベースの直列スロットリング (`throttle()`)。`fetchPurchasedKeys()` は `api/v3/payments/purchase_notes` を `page=1..200` でページング取得し、空ページで打ち切る。エンドポイントが消えた場合はこの URL を差し替えるか、複数候補を順に試すフォールバック実装に書き換える。
+- **`src/markdown.ts`** — `downloadImagesAndRewrite()` で本文 HTML を `node-html-parser` でパースし `<img>` を全部ローカル DL、`src` を `images/<sha1先頭10>.<ext>` に書き換え → `htmlToMarkdown()` で turndown 変換。`iframe`/`embed` は `[embed](url)` に、`figure` は改行で囲むカスタムルール。
 
 ## 出力レイアウト
 
