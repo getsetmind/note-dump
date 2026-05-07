@@ -9,7 +9,7 @@ export type { Config, Format, Mode };
  * @description .env を行単位パースして process.env に流し込む (dotenv 非依存)
  *   既に環境変数として存在するキーは上書きしない
  */
-function loadDotenv(path: string): void {
+export function loadDotenv(path: string): void {
 	if (!existsSync(path)) return;
 	const text = readFileSync(path, "utf8");
 	for (const raw of text.split(/\r?\n/)) {

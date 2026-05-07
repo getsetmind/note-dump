@@ -9,12 +9,14 @@
 		"dump:file": "bun run src/dump.ts --mode=file",
 		"dump:html": "bun run src/dump.ts --format=html",
 		"dump:both": "bun run src/dump.ts --format=both",
+		"menu": "bun run src/interactive.ts",
 		"cookie:cdp": "bun run scripts/get-cookie-cdp.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint .",
 		"format": "biome check --write --unsafe ."
 	},
 	"dependencies": {
+		"@clack/prompts": "^0.11.0",
 		"node-html-parser": "^7.1.0",
 		"turndown": "^7.2.4",
 		"zod": "^4.4.3"

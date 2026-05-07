@@ -201,9 +201,10 @@ function readUrlsFile(path: string): NoteRef[] {
 
 /**
  * @description CLI エントリ。設定読み込み → 対象列挙 → 並行ダンプ
+ * @param argv - --key=value 形式のフラグ + positional 引数の配列
  */
-async function main(): Promise<void> {
-	const cfg = loadConfig(process.argv.slice(2));
+export async function runDump(argv: string[]): Promise<void> {
+	const cfg = loadConfig(argv);
 	const client = new NoteClient(cfg.cookie, cfg.requestDelayMs);
 	await mkdir(cfg.outDir, { recursive: true });
 
@@ -249,7 +250,9 @@ async function main(): Promise<void> {
 	console.log(`[dump] 完了。出力先: ${cfg.outDir}`);
 }
 
-main().catch((e: Error) => {
-	console.error(e.stack ?? e.message);
-	process.exit(1);
-});
+if (import.meta.main) {
+	runDump(process.argv.slice(2)).catch((e: Error) => {
+		console.error(e.stack ?? e.message);
+		process.exit(1);
+	});
+}
