@@ -49,6 +49,15 @@ bun run dump:auto
 複数の非公式エンドポイントを順に試し、ダメならライブラリページの HTML を解析する。
 取得した一覧は `out/_index.json` に保存される。
 
+### args モード (URL を直接渡す)
+
+URL/key を引数として直接渡すと、その記事のみダンプする。`--mode` 省略時、位置引数があれば自動で `args` モードになる。
+
+```bash
+bun run dump https://note.com/<creator>/n/<noteKey>
+bun run dump <noteKey1> <noteKey2>
+```
+
 ### file モード (URL を手動で渡す)
 
 `urls.txt` を用意して 1 行 1 URL/key で書き、
@@ -67,7 +76,7 @@ bun run dump:file --urls=urls.txt
 
 | フラグ          | 既定        | 説明                            |
 | --------------- | ----------- | ------------------------------- |
-| `--mode`        | `auto`      | `auto` または `file`            |
+| `--mode`        | `auto`      | `auto` / `file` / `args`        |
 | `--out`         | `./out`     | 出力ディレクトリ                |
 | `--urls`        | `./urls.txt`| file モードで読み込む URL リスト |
 | `--concurrency` | `2`         | 同時並行数                      |

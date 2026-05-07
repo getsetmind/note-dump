@@ -110,7 +110,23 @@ async function main(): Promise<void> {
 	await mkdir(cfg.outDir, { recursive: true });
 
 	let refs: NoteRef[];
-	if (cfg.mode === "file") {
+	if (cfg.mode === "args") {
+		refs = [];
+		for (const a of cfg.positional) {
+			const key = parseUrlOrKey(a);
+			if (!key) {
+				console.warn(`[dump] 無視 (URL/key として解釈不能): ${a}`);
+				continue;
+			}
+			refs.push({
+				key,
+				url: a.startsWith("http") ? a : `https://note.com/n/${key}`,
+				title: undefined,
+				creatorUrlname: undefined,
+			});
+		}
+		console.log(`[dump] args モード: ${refs.length} 件`);
+	} else if (cfg.mode === "file") {
 		refs = readUrlsFile(cfg.urlsFile);
 		console.log(`[dump] file モード: ${refs.length} 件`);
 	} else {

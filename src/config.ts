@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-export type Mode = "auto" | "file";
+export type Mode = "auto" | "file" | "args";
 
 export interface Config {
 	cookie: string;
@@ -11,6 +11,7 @@ export interface Config {
 	mode: Mode;
 	urlsFile: string;
 	limit: number | undefined;
+	positional: string[];
 }
 
 function loadDotenv(path: string): void {
@@ -35,23 +36,30 @@ function loadDotenv(path: string): void {
 	}
 }
 
-function parseArgs(argv: string[]): Record<string, string> {
-	const out: Record<string, string> = {};
+function parseArgs(argv: string[]): {
+	flags: Record<string, string>;
+	positional: string[];
+} {
+	const flags: Record<string, string> = {};
+	const positional: string[] = [];
 	for (const a of argv) {
-		if (!a.startsWith("--")) continue;
+		if (!a.startsWith("--")) {
+			positional.push(a);
+			continue;
+		}
 		const eq = a.indexOf("=");
 		if (eq < 0) {
-			out[a.slice(2)] = "true";
+			flags[a.slice(2)] = "true";
 		} else {
-			out[a.slice(2, eq)] = a.slice(eq + 1);
+			flags[a.slice(2, eq)] = a.slice(eq + 1);
 		}
 	}
-	return out;
+	return { flags, positional };
 }
 
 export function loadConfig(argv: string[]): Config {
 	loadDotenv(resolve(process.cwd(), ".env"));
-	const args = parseArgs(argv);
+	const { flags, positional } = parseArgs(argv);
 
 	const cookie = process.env.NOTE_COOKIE ?? "";
 	if (cookie === "") {
@@ -60,17 +68,18 @@ export function loadConfig(argv: string[]): Config {
 		);
 	}
 
-	const outDir = resolve(args.out ?? process.env.OUT_DIR ?? "./out");
-	const concurrency = Number(args.concurrency ?? process.env.CONCURRENCY ?? 2);
+	const outDir = resolve(flags.out ?? process.env.OUT_DIR ?? "./out");
+	const concurrency = Number(flags.concurrency ?? process.env.CONCURRENCY ?? 2);
 	const requestDelayMs = Number(
-		args.delay ?? process.env.REQUEST_DELAY_MS ?? 600,
+		flags.delay ?? process.env.REQUEST_DELAY_MS ?? 600,
 	);
-	const mode = (args.mode ?? "auto") as Mode;
-	if (mode !== "auto" && mode !== "file") {
+	const explicitMode = flags.mode as Mode | undefined;
+	const mode: Mode = explicitMode ?? (positional.length > 0 ? "args" : "auto");
+	if (mode !== "auto" && mode !== "file" && mode !== "args") {
 		throw new Error(`不明なモード: ${mode}`);
 	}
-	const urlsFile = resolve(args.urls ?? "./urls.txt");
-	const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+	const urlsFile = resolve(flags.urls ?? "./urls.txt");
+	const limit = flags.limit !== undefined ? Number(flags.limit) : undefined;
 
 	return {
 		cookie,
@@ -80,5 +89,6 @@ export function loadConfig(argv: string[]): Config {
 		mode,
 		urlsFile,
 		limit,
+		positional,
 	};
 }
