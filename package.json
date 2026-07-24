@@ -26,7 +26,7 @@
 		"@types/bun": "^1.3.13",
 		"@types/turndown": "^5.0.6",
 		"@yuu1111/biome-config": "^1.0.4",
-		"@yuu1111/tsconfig": "^1.0.3",
+		"@yuu1111/tsconfig": "^1.0.4",
 		"typescript": "^6.0.3"
 	}
 }
