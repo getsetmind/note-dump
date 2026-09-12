@@ -1,6 +1,6 @@
 # note-dump
 
-note.com の購入済み有料記事を Markdown / HTML スナップショット + 画像 + (任意で YouTube 動画) としてローカルにダンプする CLI。
+note.com の記事を Markdown / HTML スナップショット + 画像 + (任意で YouTube 動画) としてローカルにダンプする CLI
 
 ## 必要環境
 
@@ -18,7 +18,7 @@ cp .env.example .env
 
 #### A. CDP 自動取得 (推奨)
 
-Comet/Chrome を `--remote-debugging-port=9222` 付きで起動済みで note.com にログインしている前提:
+Chrome を `--remote-debugging-port=9222` 付きで起動済みで note.com にログインしている前提:
 
 ```bash
 bun run cookie:cdp
@@ -112,9 +112,3 @@ out/
    └─ videos/                        # --youtube-dl 指定時のみ
       └─ <id>.<ext>
 ```
-
-## 注意
-
-- note.com の API は非公式・無保証。エンドポイントが消える可能性あり
-- 過度な並行・短い delay はレートリミットや BAN を招くため避ける
-- ダンプしたコンテンツは個人利用に留め、再配布しない
