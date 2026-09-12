@@ -5,19 +5,20 @@ export default defineConfig({
 		biome: true,
 		typecheck: true,
 		knip: true,
+		"code-style-check": true,
 		"comment-check": true,
 		"document-style-check": true,
 		"tsdoc-check": true,
 	},
 	config: {
 		"comment-check": {
-			enable: ["cramped-comment", "japanese-period"]
+			enable: ["cramped-comment", "japanese-period"],
 		},
 		"document-style-check": {
-			enable: ["japanese-period"]
-		 },
+			enable: ["japanese-period"],
+		},
 		"tsdoc-check": {
-			error: ["missing-doc", "single-line-doc", "tsdoc-tag"]
+			error: ["missing-doc", "single-line-doc", "tsdoc-tag"],
 		},
 	},
 });

@@ -15,10 +15,11 @@
         "@types/bun": "^1.4.2",
         "@types/turndown": "^5.0.6",
         "@yuu1111/biome-config": "^2.0.1",
+        "@yuu1111/code-style-check": "^0.1.1",
         "@yuu1111/comment-check": "^2.2.0",
         "@yuu1111/document-style-check": "^0.3.1",
         "@yuu1111/knip-config": "^1.0.6",
-        "@yuu1111/quality-check": "^0.7.0",
+        "@yuu1111/quality-check": "^0.9.0",
         "@yuu1111/tsconfig": "^1.0.6",
         "@yuu1111/tsdoc-check": "^2.0.1",
         "knip": "^6.35.1",
@@ -197,13 +198,15 @@
 
     "@yuu1111/biome-config": ["@yuu1111/biome-config@2.0.1", "", {}, "sha512-LpD0BRY638Eyg8pALbv1Gi9UatuYRM4XZy+N7Y3sHypsVddgHCAsL571oVOtBgYULSjzqouZNwd0/razPVCpBA=="],
 
+    "@yuu1111/code-style-check": ["@yuu1111/code-style-check@0.1.1", "", { "dependencies": { "@babel/parser": "^8.0.5" }, "bin": { "code-style-check": "bin/cli.js" } }, "sha512-t25UfQrpXGCjn1LovVmqh/Yv8ZtliSZRGoWWFtOJOtZ6LDQDe6QThC5vM0/HDwPZzhDu/dX9ioO97FE1pGn8OA=="],
+
     "@yuu1111/comment-check": ["@yuu1111/comment-check@2.2.0", "", { "bin": { "comment-check": "dist/cli.js" } }, "sha512-WHDievrig9CXpMwNpUsrpoK1XRzHbUs9U4+2yCEpjJaxb5e5vgjuic8vwsVFGRaT6jdSp12J31ey7Ffj0qV/0Q=="],
 
     "@yuu1111/document-style-check": ["@yuu1111/document-style-check@0.3.1", "", { "bin": { "document-style-check": "dist/cli.js" } }, "sha512-EAqQGVXCi2amQIDYTbEXIh+Piv/SISKaUeb0SJQmgef/x6yvEgSp3n+fUduTio/UNfrd3Ola4fGt5zY1s86fmg=="],
 
     "@yuu1111/knip-config": ["@yuu1111/knip-config@1.0.6", "", { "peerDependencies": { "knip": ">=5.0.0" }, "optionalPeers": ["knip"] }, "sha512-7uv7W/dQ1VGfyCHNzkUFlSSX6iurT7teAjVN5QGeCUBtFcb8/d3DvykdlTUVEStVpMc+UHNBjPUKEL08ALlbFw=="],
 
-    "@yuu1111/quality-check": ["@yuu1111/quality-check@0.7.0", "", { "bin": { "quality-check": "dist/cli.js" } }, "sha512-uJwqUzajI4syWGV6alLHnSxBGozA7TtcaAe0uh+R1cNzAi8JBMGxSukvnQD5hS6cdN/nEiSSbtU6srZKqxTHdQ=="],
+    "@yuu1111/quality-check": ["@yuu1111/quality-check@0.9.0", "", { "bin": { "quality-check": "bin/cli.js" } }, "sha512-I+rP5VSDnyRx5WKzgSOibHG/0aCy78sddSQryQhV2BG4aqQ013REgxmD4IpM7BQO+NNoRFusXgZajoUUrdHSvQ=="],
 
     "@yuu1111/tsconfig": ["@yuu1111/tsconfig@1.0.6", "", {}, "sha512-YXrkNnvvTR3b+OF9uFGgRz9DLgfQS0obKRSI5rnwui4n2Rcoh5dIiwe02+LHjgMILsEsmqzFsJ8+zly0JSGIIg=="],
 
