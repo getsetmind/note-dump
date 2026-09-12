@@ -7,13 +7,7 @@ import type { Format } from "./schemas";
 /**
  * @description トップメニューの選択肢
  */
-type MenuChoice =
-	| "auto"
-	| "args"
-	| "file"
-	| "cookie"
-	| "settings"
-	| "exit";
+type MenuChoice = "auto" | "args" | "file" | "cookie" | "settings" | "exit";
 
 /**
  * @description ダンプ系メニューで共通に聞く出力オプション
