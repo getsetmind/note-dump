@@ -98,6 +98,7 @@ export async function downloadImagesAndRewrite(
 			applyLocalSrc(img, filename);
 			cache?.set(absUrl, filename);
 			count++;
+			// biome-ignore lint/plugin: 画像1枚の失敗で記事全体を止めず、残りの画像を継続する
 		} catch (e) {
 			console.warn(`  [img] ${absUrl} 失敗: ${(e as Error).message}`);
 		}
@@ -123,10 +124,8 @@ export function htmlToMarkdown(html: string): string {
 			return tag === "iframe" || tag === "embed";
 		},
 		replacement: (_content, node) => {
-			const el = node as unknown as {
-				getAttribute: (n: string) => string | null;
-			};
-			const src = el.getAttribute("src") ?? "";
+			if (!("getAttribute" in node)) return "";
+			const src = node.getAttribute("src") ?? "";
 			return src ? `\n\n[embed](${src})\n\n` : "";
 		},
 	});

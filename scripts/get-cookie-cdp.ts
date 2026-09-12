@@ -1,5 +1,5 @@
-// CDP (Chrome DevTools Protocol) 経由で note.com の Cookie を全取得して .env を生成する。
-// httpOnly Cookie も含めて取れる。
+// CDP (Chrome DevTools Protocol) 経由で note.com の Cookie を全取得して .env を生成する
+// httpOnly Cookie も含めて取れる
 //
 // 前提:
 //  - Comet (または Chrome) を `--remote-debugging-port=9222` 付きで起動済みであること

@@ -1,7 +1,9 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
 	"extends": [
-		"@yuu1111/biome-config/biome"
+		"@yuu1111/biome-config/biome",
+		"@yuu1111/biome-config/plugins/core",
+		"@yuu1111/biome-config/plugins/network"
 	],
 	"files": {
 		"includes": [

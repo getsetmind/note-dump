@@ -1,11 +1,11 @@
-// note.com にログインした状態で、DevTools (F12) のコンソールに貼り付けて実行する。
+// note.com にログインした状態で、DevTools (F12) のコンソールに貼り付けて実行する
 //
 // 重要: _note_session_v5 / XSRF-TOKEN は httpOnly のため JavaScript からは
-// 取得できない。このスクリプトは
+// 取得できず、このスクリプトは
 //   1. document.cookie で取れる分を表示・クリップボードにコピー
 //   2. httpOnly 分を Application タブから手動で取得する手順を表示
 //   3. 最終的に .env に貼る形のテンプレートを生成
-// する。
+// する
 (async () => {
 	const visible = document.cookie;
 	const required = ["_note_session_v5", "XSRF-TOKEN"];

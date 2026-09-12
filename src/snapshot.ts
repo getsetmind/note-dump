@@ -11,6 +11,19 @@ interface CdpMessage {
 }
 
 /**
+ * /json/version 取得のタイムアウト (ms)
+ */
+const CDP_HTTP_TIMEOUT_MS = 8000;
+
+/**
+ * 受信値を CdpMessage として扱えるか判定する
+ * 既知フィールドはすべて任意なので、オブジェクトであることだけを確認する
+ */
+function isCdpMessage(value: unknown): value is CdpMessage {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * CDP に複数 RPC を投げ、Page イベントを待てる軽量クライアント
  * 1 WebSocket をプールして送信 ID と pending を自前管理する
  */
@@ -41,7 +54,8 @@ class CdpSession {
 				clearTimeout(t);
 				this.ws = ws;
 				ws.onmessage = (ev) => {
-					this.dispatch(JSON.parse(ev.data as string) as CdpMessage);
+					const parsed: unknown = JSON.parse(ev.data as string);
+					if (isCdpMessage(parsed)) this.dispatch(parsed);
 				};
 				res();
 			};
@@ -160,17 +174,27 @@ class CdpSession {
  * /json/version からブラウザレベルの WebSocket URL を取得する
  */
 async function getBrowserWsUrl(cdpUrl: string): Promise<string> {
-	const res = await fetch(`${cdpUrl}/json/version`);
+	const res = await fetch(`${cdpUrl}/json/version`, {
+		signal: AbortSignal.timeout(CDP_HTTP_TIMEOUT_MS),
+	});
 	if (!res.ok) {
 		throw new Error(
 			`CDP に接続できない (${cdpUrl}). ブラウザを --remote-debugging-port 付きで起動済みか確認してください。`,
 		);
 	}
-	const j = (await res.json()) as { webSocketDebuggerUrl?: string };
-	if (!j.webSocketDebuggerUrl) {
+	const body: unknown = await res.json();
+	if (
+		typeof body !== "object" ||
+		body === null ||
+		!("webSocketDebuggerUrl" in body)
+	) {
 		throw new Error("/json/version に webSocketDebuggerUrl が無い");
 	}
-	return j.webSocketDebuggerUrl;
+	const wsUrl = body.webSocketDebuggerUrl;
+	if (typeof wsUrl !== "string") {
+		throw new Error("/json/version の webSocketDebuggerUrl が文字列でない");
+	}
+	return wsUrl;
 }
 
 /**
@@ -231,6 +255,7 @@ export async function captureRenderedHtml(
 	} finally {
 		try {
 			if (targetId) await sess.send("Target.closeTarget", { targetId });
+			// biome-ignore lint/plugin: target close 失敗より WS を閉じる後始末を優先する
 		} catch (e) {
 			console.warn(`  [snapshot] target close 失敗: ${(e as Error).message}`);
 		}

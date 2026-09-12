@@ -140,6 +140,7 @@ export async function downloadYoutubeAll(
 		try {
 			await runYtDlp(url, outDir);
 			ok++;
+			// biome-ignore lint/plugin: 1本の失敗で残りの動画取得を止めない
 		} catch (e) {
 			console.warn(`  [yt-dlp] ${url} 失敗: ${(e as Error).message}`);
 		}

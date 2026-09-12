@@ -200,12 +200,25 @@ async function runWithConcurrency<T>(
 			if (item === undefined) return;
 			try {
 				await worker(item, i);
+				// biome-ignore lint/plugin: 1件の失敗で全体を止めず、残りのアイテムを継続する
 			} catch (e) {
 				console.error(`[dump] item #${i} 失敗: ${(e as Error).message}`);
 			}
 		}
 	});
 	await Promise.all(runners);
+}
+
+/**
+ * 例外から errno code を取り出す
+ * NodeJS.ErrnoException を assertion せず、実行時に code を検証する
+ */
+function errnoCode(error: unknown): string | undefined {
+	if (typeof error !== "object" || error === null || !("code" in error)) {
+		return undefined;
+	}
+	const code = error.code;
+	return typeof code === "string" ? code : undefined;
 }
 
 /**
@@ -217,8 +230,7 @@ function readUrlsFile(path: string): NoteRef[] {
 	try {
 		text = readFileSync(path, "utf8");
 	} catch (e) {
-		const code = (e as NodeJS.ErrnoException).code;
-		if (code === "ENOENT") {
+		if (errnoCode(e) === "ENOENT") {
 			throw new Error(`urls ファイルが見つからない: ${path}`);
 		}
 		throw e;

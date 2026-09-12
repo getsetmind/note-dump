@@ -1,11 +1,11 @@
 # プロジェクト概要
 
-note.com の購入済み有料記事を Markdown + 画像でローカルにダンプする Bun 製 CLI。
-note.com の 非公式API + ログイン Cookie を使うため、エンドポイントが消える前提で複数候補を順に試すフォールバック戦略を取る。
+note.com の購入済み有料記事を Markdown + 画像でローカルにダンプする Bun 製 CLI
+note.com の 非公式API + ログイン Cookie を使うため、エンドポイントが消える前提で複数候補を順に試すフォールバック戦略を取る
 
 # コマンド
 
-ランタイムは Bun (1.3+)。`npm`/`node` ではなく `bun` を使う。
+ランタイムは Bun (1.3+)、`npm`/`node` ではなく `bun` を使う
 
 ```bash
 bun install

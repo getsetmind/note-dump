@@ -16,6 +16,16 @@ const UA =
 const MAX_PURCHASE_PAGES = 200;
 
 /**
+ * テキスト API のタイムアウト (ms)
+ */
+const REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * 画像などバイナリ取得のタイムアウト (ms)
+ */
+const BINARY_TIMEOUT_MS = 60000;
+
+/**
  * 一覧取得時に使う最小限の記事情報
  */
 export interface NoteRef {
@@ -82,6 +92,7 @@ export class NoteClient {
 				Referer: "https://note.com/",
 			},
 			redirect: "follow",
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		});
 		if (!res.ok) {
 			throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
@@ -90,11 +101,12 @@ export class NoteClient {
 	}
 
 	/**
-	 * JSON を取得する (型は呼び出し側で zod 検証する想定)
+	 * JSON を取得する
+	 * 検証前の生値を返すため、呼び出し側で zod により検証する
 	 */
-	async getJSON<T>(url: string): Promise<T> {
+	async getJSON(url: string): Promise<unknown> {
 		const text = await this.getText(url, "application/json");
-		return JSON.parse(text) as T;
+		return JSON.parse(text);
 	}
 
 	/**
@@ -105,6 +117,7 @@ export class NoteClient {
 		const res = await fetch(url, {
 			headers: { "User-Agent": UA, Referer: "https://note.com/" },
 			redirect: "follow",
+			signal: AbortSignal.timeout(BINARY_TIMEOUT_MS),
 		});
 		if (!res.ok) {
 			throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
@@ -120,7 +133,7 @@ export class NoteClient {
 	 */
 	async fetchNote(key: string): Promise<NoteDetail> {
 		const url = `https://note.com/api/v3/notes/${key}`;
-		const json = await this.getJSON<unknown>(url);
+		const json = await this.getJSON(url);
 		const parsed = NoteDetailResponseSchema.safeParse(json);
 		if (!parsed.success) {
 			throw new Error(
@@ -156,7 +169,7 @@ export class NoteClient {
 		let page = 1;
 		while (page <= MAX_PURCHASE_PAGES) {
 			const url = `${endpoint}&page=${page}`;
-			const json = await this.getJSON<unknown>(url);
+			const json = await this.getJSON(url);
 			const parsed = PurchasedListResponseSchema.safeParse(json);
 			if (!parsed.success) {
 				console.warn(
