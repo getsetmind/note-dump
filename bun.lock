@@ -14,13 +14,13 @@
         "@biomejs/biome": "^2.5.13",
         "@types/bun": "^1.4.2",
         "@types/turndown": "^5.0.6",
-        "@yuu1111/biome-config": "^2.0.0",
-        "@yuu1111/comment-check": "^1.0.1",
-        "@yuu1111/document-style-check": "^0.1.1",
-        "@yuu1111/knip-config": "^1.0.5",
-        "@yuu1111/quality-check": "^0.5.1",
-        "@yuu1111/tsconfig": "^1.0.5",
-        "@yuu1111/tsdoc-check": "^1.1.0",
+        "@yuu1111/biome-config": "^2.0.1",
+        "@yuu1111/comment-check": "^2.2.0",
+        "@yuu1111/document-style-check": "^0.3.1",
+        "@yuu1111/knip-config": "^1.0.6",
+        "@yuu1111/quality-check": "^0.7.0",
+        "@yuu1111/tsconfig": "^1.0.6",
+        "@yuu1111/tsdoc-check": "^2.0.1",
         "knip": "^6.35.1",
         "typescript": "^7.0.2",
       },
@@ -195,19 +195,19 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@yuu1111/biome-config": ["@yuu1111/biome-config@2.0.0", "", {}, "sha512-k7ea61AgGXstyvo7VbzS1j6+bwi/Xo6Hdg965kmD4yY3/VmoSXXCx414aRHKGs6KgFc125UrSjzUiHMiGm5iFA=="],
+    "@yuu1111/biome-config": ["@yuu1111/biome-config@2.0.1", "", {}, "sha512-LpD0BRY638Eyg8pALbv1Gi9UatuYRM4XZy+N7Y3sHypsVddgHCAsL571oVOtBgYULSjzqouZNwd0/razPVCpBA=="],
 
-    "@yuu1111/comment-check": ["@yuu1111/comment-check@1.0.1", "", { "bin": { "comment-check": "src/cli.ts" } }, "sha512-v4emny/GAwZNg2lvc4aPx5/4p5VRvzJBQAOQxqHSlGh2bz0kiSE/5+ZVl4f6hMRzE+ejh0euEHKRUs+utvX1TA=="],
+    "@yuu1111/comment-check": ["@yuu1111/comment-check@2.2.0", "", { "bin": { "comment-check": "dist/cli.js" } }, "sha512-WHDievrig9CXpMwNpUsrpoK1XRzHbUs9U4+2yCEpjJaxb5e5vgjuic8vwsVFGRaT6jdSp12J31ey7Ffj0qV/0Q=="],
 
-    "@yuu1111/document-style-check": ["@yuu1111/document-style-check@0.1.1", "", { "bin": { "document-style-check": "src/cli.ts" } }, "sha512-OeBt0VKZUj5iLhuvO3/ITG+F7wuZYbwBY6zOJ6/ekJW1+/wIpdKATakJZXRh0Kul3H5JzIkVlG8KCWPfnhQkGg=="],
+    "@yuu1111/document-style-check": ["@yuu1111/document-style-check@0.3.1", "", { "bin": { "document-style-check": "dist/cli.js" } }, "sha512-EAqQGVXCi2amQIDYTbEXIh+Piv/SISKaUeb0SJQmgef/x6yvEgSp3n+fUduTio/UNfrd3Ola4fGt5zY1s86fmg=="],
 
-    "@yuu1111/knip-config": ["@yuu1111/knip-config@1.0.5", "", { "peerDependencies": { "knip": ">=5.0.0" }, "optionalPeers": ["knip"] }, "sha512-LiUBdfM+wkO8glAwwS+z4MGN2JHaSduhen+Lpx2jr8r87IQf0sfySIroslPAVgOVTcpiBbRshvnnBE6agxOtew=="],
+    "@yuu1111/knip-config": ["@yuu1111/knip-config@1.0.6", "", { "peerDependencies": { "knip": ">=5.0.0" }, "optionalPeers": ["knip"] }, "sha512-7uv7W/dQ1VGfyCHNzkUFlSSX6iurT7teAjVN5QGeCUBtFcb8/d3DvykdlTUVEStVpMc+UHNBjPUKEL08ALlbFw=="],
 
-    "@yuu1111/quality-check": ["@yuu1111/quality-check@0.5.1", "", { "bin": { "quality-check": "src/cli.ts" } }, "sha512-q7dNvAAK6C/Va5aZn7353TGpB9NZH8ePE/axxE0y1DH+OdzJE1DHgPlBPs8Uqe2YCxOBDmfitb4QvcpALYyvOg=="],
+    "@yuu1111/quality-check": ["@yuu1111/quality-check@0.7.0", "", { "bin": { "quality-check": "dist/cli.js" } }, "sha512-uJwqUzajI4syWGV6alLHnSxBGozA7TtcaAe0uh+R1cNzAi8JBMGxSukvnQD5hS6cdN/nEiSSbtU6srZKqxTHdQ=="],
 
-    "@yuu1111/tsconfig": ["@yuu1111/tsconfig@1.0.5", "", {}, "sha512-Z5IOUUALRn3XofyrFpZwpPVO86JDiV125xO6XsM1MgV5zqWiUxLbWStyUwwqKJoQfi4N+bwb3AirQAmsxc5nbQ=="],
+    "@yuu1111/tsconfig": ["@yuu1111/tsconfig@1.0.6", "", {}, "sha512-YXrkNnvvTR3b+OF9uFGgRz9DLgfQS0obKRSI5rnwui4n2Rcoh5dIiwe02+LHjgMILsEsmqzFsJ8+zly0JSGIIg=="],
 
-    "@yuu1111/tsdoc-check": ["@yuu1111/tsdoc-check@1.1.0", "", { "dependencies": { "@babel/parser": "^8.0.5", "@microsoft/tsdoc": "^0.16.0" }, "bin": { "tsdoc-check": "src/cli.ts" } }, "sha512-SU6rDR7VtF9wJ1cOS8sKcT7Ef3+nFElL1o20LVTVaXDurBrBsZdFSkwerBTBDaLe+8ZFygy/tlc5LJOLPZopvg=="],
+    "@yuu1111/tsdoc-check": ["@yuu1111/tsdoc-check@2.0.1", "", { "dependencies": { "@babel/parser": "^8.0.5", "@microsoft/tsdoc": "^0.16.0" }, "bin": { "tsdoc-check": "dist/cli.js" } }, "sha512-p/ijZftx0BujEmf4SrT4yys7bhLlEeUTo1l3N6Z8yiEgfRCe5p/ygy9+AuC/xd7WpAGeWKKTCYFez5k+bzV1xg=="],
 
     "boolbase": ["boolbase@1.0.0", "", {}, "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww=="],
 
