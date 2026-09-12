@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { NoteClient, type NoteRef, parseUrlOrKey } from "./api";
+import {
+	NoteClient,
+	type NoteDetail,
+	type NoteRef,
+	parseUrlOrKey,
+} from "./api";
 import { type Config, loadConfig } from "./config";
 import { downloadImagesAndRewrite, htmlToMarkdown } from "./markdown";
 import { captureRenderedHtml } from "./snapshot";
@@ -38,10 +43,100 @@ function refFromInput(input: string): NoteRef | undefined {
 }
 
 /**
- * @description 1 記事ぶんの取得 + Markdown/HTML/動画書き出しを一括実行
- * @param client - 認証付き API クライアント
- * @param ref - 取得対象の記事参照
- * @param cfg - format/youtubeDl 等の出力切り替えに使う設定
+ * frontmatter と本文を index.md へ書き出し、保存した画像の枚数を返す
+ */
+async function writeMarkdown(
+	detail: NoteDetail,
+	ref: NoteRef,
+	dir: string,
+	client: NoteClient,
+	imageCache: Map<string, string>,
+): Promise<number> {
+	const { html, count } = await downloadImagesAndRewrite(
+		detail.body,
+		join(dir, "images"),
+		client,
+		imageCache,
+	);
+	const md = `${frontmatter(detail, ref)}# ${detail.name}\n\n${htmlToMarkdown(html)}\n`;
+	await writeFile(join(dir, "index.md"), md, "utf8");
+	return count;
+}
+
+/**
+ * index.md 先頭の YAML frontmatter を組み立てる
+ */
+function frontmatter(detail: NoteDetail, ref: NoteRef): string {
+	const lines = [
+		"---",
+		`key: ${detail.key}`,
+		`title: ${JSON.stringify(detail.name)}`,
+		`url: ${ref.url}`,
+		detail.user ? `creator: ${detail.user.urlname}` : undefined,
+		detail.user
+			? `creator_name: ${JSON.stringify(detail.user.nickname)}`
+			: undefined,
+		detail.publishAt ? `publish_at: ${detail.publishAt}` : undefined,
+		detail.createdAt ? `created_at: ${detail.createdAt}` : undefined,
+		detail.priceText ? `price: ${detail.priceText}` : undefined,
+		`dumped_at: ${new Date().toISOString()}`,
+		"---",
+		"",
+	];
+	return lines.filter((x) => x !== undefined).join("\n");
+}
+
+/**
+ * 本文の YouTube 埋め込みを videos ディレクトリへ保存し、本数を返す
+ */
+async function downloadVideos(
+	detail: NoteDetail,
+	dir: string,
+): Promise<number> {
+	const urls = extractYoutubeUrls(detail.body);
+	if (urls.length === 0) return 0;
+	return await downloadYoutubeAll(urls, join(dir, "videos"));
+}
+
+/**
+ * CDP で描画した記事 HTML を page.html として保存する
+ * 取得に失敗した場合は ok=false を返して warn のみで継続する
+ */
+async function writeRenderedHtml(
+	detail: NoteDetail,
+	ref: NoteRef,
+	cfg: Config,
+	dir: string,
+	client: NoteClient,
+	imageCache: Map<string, string>,
+): Promise<{ ok: boolean; images: number }> {
+	// note.com/n/<key> は 404 になるため urlname 込みで再構築する
+	const articleUrl = detail.user?.urlname
+		? `https://note.com/${detail.user.urlname}/n/${detail.key}`
+		: ref.url;
+	try {
+		const captured = await captureRenderedHtml(cfg.cdpUrl, articleUrl);
+		const { html, count } = await downloadImagesAndRewrite(
+			captured,
+			join(dir, "images"),
+			client,
+			imageCache,
+		);
+		let finalHtml = html;
+		if (cfg.youtubeDl) {
+			const map = await buildLocalVideoMap(join(dir, "videos"));
+			finalHtml = rewriteYoutubeEmbedsToLocal(finalHtml, "videos", map);
+		}
+		await writeFile(join(dir, "page.html"), finalHtml, "utf8");
+		return { ok: true, images: count };
+	} catch (e) {
+		console.warn(`  [snapshot] 失敗: ${(e as Error).message}`);
+		return { ok: false, images: 0 };
+	}
+}
+
+/**
+ * 1 記事ぶんの取得と Markdown / HTML / 動画の書き出しをまとめて実行する
  */
 async function dumpOne(
 	client: NoteClient,
@@ -58,38 +153,9 @@ async function dumpOne(
 
 	const imageCache = new Map<string, string>();
 
-	let imageCount = 0;
-	if (wantMd) {
-		const { html, count } = await downloadImagesAndRewrite(
-			detail.body,
-			join(dir, "images"),
-			client,
-			imageCache,
-		);
-		imageCount = count;
-
-		const fm = [
-			"---",
-			`key: ${detail.key}`,
-			`title: ${JSON.stringify(detail.name)}`,
-			`url: ${ref.url}`,
-			detail.user ? `creator: ${detail.user.urlname}` : undefined,
-			detail.user
-				? `creator_name: ${JSON.stringify(detail.user.nickname)}`
-				: undefined,
-			detail.publishAt ? `publish_at: ${detail.publishAt}` : undefined,
-			detail.createdAt ? `created_at: ${detail.createdAt}` : undefined,
-			detail.priceText ? `price: ${detail.priceText}` : undefined,
-			`dumped_at: ${new Date().toISOString()}`,
-			"---",
-			"",
-		]
-			.filter((x) => x !== undefined)
-			.join("\n");
-
-		const md = `${fm}# ${detail.name}\n\n${htmlToMarkdown(html)}\n`;
-		await writeFile(join(dir, "index.md"), md, "utf8");
-	}
+	const imageCount = wantMd
+		? await writeMarkdown(detail, ref, dir, client, imageCache)
+		: 0;
 
 	await writeFile(
 		join(dir, "meta.json"),
@@ -98,46 +164,19 @@ async function dumpOne(
 	);
 
 	// HTML 内で YouTube 埋め込みをローカル動画に差し替えるため、html 出力より先に DL する
-	let ytCount = 0;
-	if (cfg.youtubeDl) {
-		const urls = extractYoutubeUrls(detail.body);
-		if (urls.length > 0) {
-			ytCount = await downloadYoutubeAll(urls, join(dir, "videos"));
-		}
-	}
+	const ytCount = cfg.youtubeDl ? await downloadVideos(detail, dir) : 0;
 
-	let htmlOk = false;
-	let htmlImages = 0;
-	if (wantHtml) {
-		// note.com/n/<key> は 404 になるため urlname 込みで再構築する
-		const articleUrl = detail.user?.urlname
-			? `https://note.com/${detail.user.urlname}/n/${detail.key}`
-			: ref.url;
-		try {
-			const captured = await captureRenderedHtml(cfg.cdpUrl, articleUrl);
-			const r = await downloadImagesAndRewrite(
-				captured,
-				join(dir, "images"),
-				client,
-				imageCache,
-			);
-			let finalHtml = r.html;
-			if (cfg.youtubeDl) {
-				const map = await buildLocalVideoMap(join(dir, "videos"));
-				finalHtml = rewriteYoutubeEmbedsToLocal(finalHtml, "videos", map);
-			}
-			await writeFile(join(dir, "page.html"), finalHtml, "utf8");
-			htmlImages = r.count;
-			htmlOk = true;
-		} catch (e) {
-			console.warn(`  [snapshot] 失敗: ${(e as Error).message}`);
-		}
-	}
+	const htmlResult = wantHtml
+		? await writeRenderedHtml(detail, ref, cfg, dir, client, imageCache)
+		: undefined;
 
 	const parts: string[] = [];
 	if (wantMd) parts.push(`images: ${imageCount}`);
-	if (wantHtml)
-		parts.push(`html: ${htmlOk ? `ok (+${htmlImages} img)` : "fail"}`);
+	if (htmlResult) {
+		parts.push(
+			`html: ${htmlResult.ok ? `ok (+${htmlResult.images} img)` : "fail"}`,
+		);
+	}
 	if (cfg.youtubeDl) parts.push(`youtube: ${ytCount}`);
 	console.log(`  -> ${dir}  (${parts.join(", ")})`);
 }

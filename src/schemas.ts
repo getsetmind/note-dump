@@ -12,10 +12,10 @@ const PurchasedItemInnerSchema = z
 			.object({
 				urlname: z.string().optional(),
 			})
-			.passthrough()
+			.loose()
 			.optional(),
 	})
-	.passthrough();
+	.loose();
 
 /**
  * @description 購入済みリストの 1 行
@@ -41,11 +41,11 @@ export const PurchasedListResponseSchema = z
 	.object({
 		data: z.array(z.unknown()).optional(),
 	})
-	.passthrough();
+	.loose();
 
 /**
  * @description GET /api/v3/notes/:key のレスポンス
- *   未知フィールドは passthrough で raw に残す
+ *   未知フィールドは loose で raw に残す
  */
 export const NoteDetailResponseSchema = z.object({
 	data: z
@@ -61,10 +61,10 @@ export const NoteDetailResponseSchema = z.object({
 					urlname: z.string().optional(),
 					nickname: z.string().optional(),
 				})
-				.passthrough()
+				.loose()
 				.optional(),
 		})
-		.passthrough(),
+		.loose(),
 });
 
 /**

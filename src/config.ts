@@ -6,7 +6,7 @@ import { type Config, ConfigSchema, type Format, type Mode } from "./schemas";
 export type { Config, Format, Mode };
 
 /**
- * @description .env を行単位パースして process.env に流し込む (dotenv 非依存)
+ * @description .env を行単位パースして process.env に流し込む
  *   既に環境変数として存在するキーは上書きしない
  */
 export function loadDotenv(path: string): void {

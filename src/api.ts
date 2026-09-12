@@ -8,7 +8,7 @@ import {
  * @description note.com に送る User-Agent
  */
 const UA =
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36";
 
 /**
  * @description 購入済み API のページング上限。暴走防止のため
@@ -179,20 +179,7 @@ export class NoteClient {
 			}
 			const items = parsed.data.data ?? [];
 			if (items.length === 0) break;
-			let added = 0;
-			let skipped = 0;
-			for (const it of items) {
-				const ref = parseRef(it);
-				if (!ref) {
-					skipped++;
-					continue;
-				}
-				if (!seen.has(ref.key)) {
-					seen.add(ref.key);
-					collected.push(ref);
-					added++;
-				}
-			}
+			const { added, skipped } = collectRefs(items, collected, seen);
 			const skipNote = skipped > 0 ? ` (skip ${skipped})` : "";
 			console.log(
 				`[api] page=${page} +${added}${skipNote} (total ${collected.length})`,
@@ -201,6 +188,31 @@ export class NoteClient {
 		}
 		return collected;
 	}
+}
+
+/**
+ * 1 ページぶんのアイテムを zod 検証して collected へ重複なく追加する
+ * 検証に失敗したアイテムは skipped に数えて読み飛ばす
+ */
+function collectRefs(
+	items: unknown[],
+	collected: NoteRef[],
+	seen: Set<string>,
+): { added: number; skipped: number } {
+	let added = 0;
+	let skipped = 0;
+	for (const item of items) {
+		const ref = parseRef(item);
+		if (!ref) {
+			skipped++;
+			continue;
+		}
+		if (seen.has(ref.key)) continue;
+		seen.add(ref.key);
+		collected.push(ref);
+		added++;
+	}
+	return { added, skipped };
 }
 
 /**

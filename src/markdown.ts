@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { parse as parseHTML } from "node-html-parser";
+import { type HTMLElement, parse as parseHTML } from "node-html-parser";
 import TurndownService from "turndown";
 import type { NoteClient } from "./api";
 
@@ -36,11 +36,31 @@ function shortHash(s: string): string {
 }
 
 /**
- * @description 本文 HTML 内の画像を DL してローカル参照に書き換える
- * @param bodyHtml - 入力 HTML
- * @param imageDir - 画像を書き出すディレクトリ
- * @param client - 認証付き fetch クライアント
- * @param cache - 同一記事内で複数回呼ぶ場合の URL -> filename キャッシュ @optional
+ * 遅延読み込み用の属性も見て画像の絶対 URL を求める
+ * 解決できない場合と data: 画像の場合は undefined
+ */
+function imageUrl(img: HTMLElement): string | undefined {
+	const rawSrc = img.getAttribute("src");
+	const dataSrc =
+		img.getAttribute("data-src") ?? img.getAttribute("data-original-src");
+	const src =
+		rawSrc && !rawSrc.startsWith("data:") ? rawSrc : (dataSrc ?? rawSrc);
+	if (!src || src.startsWith("data:")) return undefined;
+	return src.startsWith("http") ? src : `https:${src}`;
+}
+
+/**
+ * img をローカル画像へ向け、遅延読み込み用の属性を落とす
+ */
+function applyLocalSrc(img: HTMLElement, filename: string): void {
+	img.setAttribute("src", `images/${filename}`);
+	img.removeAttribute("data-src");
+	img.removeAttribute("srcset");
+}
+
+/**
+ * 本文 HTML 内の画像を DL してローカル参照に書き換える
+ * cache を渡すと同一記事内の再取得を省ける
  */
 export async function downloadImagesAndRewrite(
 	bodyHtml: string,
@@ -53,37 +73,29 @@ export async function downloadImagesAndRewrite(
 	let count = 0;
 	let dirReady = false;
 
-	for (const img of imgs) {
-		const rawSrc = img.getAttribute("src");
-		const dataSrc =
-			img.getAttribute("data-src") ?? img.getAttribute("data-original-src");
-		const src =
-			rawSrc && !rawSrc.startsWith("data:") ? rawSrc : (dataSrc ?? rawSrc);
-		if (!src || src.startsWith("data:")) continue;
+	const ensureDir = async (): Promise<void> => {
+		if (dirReady) return;
+		await mkdir(imageDir, { recursive: true });
+		dirReady = true;
+	};
 
-		const absUrl = src.startsWith("http") ? src : `https:${src}`;
+	for (const img of imgs) {
+		const absUrl = imageUrl(img);
+		if (!absUrl) continue;
 
 		const cached = cache?.get(absUrl);
 		if (cached) {
-			img.setAttribute("src", `images/${cached}`);
-			img.removeAttribute("data-src");
-			img.removeAttribute("srcset");
+			applyLocalSrc(img, cached);
 			count++;
 			continue;
 		}
 
 		try {
 			const { buf, type } = await client.fetchBinary(absUrl);
-			const ext = extFor(absUrl, type);
-			const filename = `${shortHash(absUrl)}${ext}`;
-			if (!dirReady) {
-				await mkdir(imageDir, { recursive: true });
-				dirReady = true;
-			}
+			const filename = `${shortHash(absUrl)}${extFor(absUrl, type)}`;
+			await ensureDir();
 			await Bun.write(join(imageDir, filename), buf);
-			img.setAttribute("src", `images/${filename}`);
-			img.removeAttribute("data-src");
-			img.removeAttribute("srcset");
+			applyLocalSrc(img, filename);
 			cache?.set(absUrl, filename);
 			count++;
 		} catch (e) {

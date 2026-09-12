@@ -135,7 +135,7 @@ async function flowArgs(): Promise<void> {
 	const raw = await p.text({
 		message: "URL or note key を入力 (空白/カンマ/改行で区切り)",
 		placeholder: "https://note.com/<user>/n/<key>  または  n123abc",
-		validate: (v) => (v.trim() === "" ? "1 つ以上指定してください" : undefined),
+		validate: (v) => (v?.trim() ? undefined : "1 つ以上指定してください"),
 	});
 	bailIfCancelled(raw);
 	const inputs = splitInputs(raw);

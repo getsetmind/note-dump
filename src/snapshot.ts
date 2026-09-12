@@ -64,24 +64,46 @@ class CdpSession {
 	 */
 	private dispatch(m: CdpMessage): void {
 		if (m.id !== undefined) {
-			const p = this.pending.get(m.id);
-			if (!p) return;
-			this.pending.delete(m.id);
-			if (m.error) {
-				p.reject(new Error(m.error.message));
-			} else {
-				p.resolve(m.result ?? {});
-			}
+			this.settlePending(m.id, m.result, m.error);
 			return;
 		}
 		if (m.method) {
-			for (let i = this.waiters.length - 1; i >= 0; i--) {
-				const w = this.waiters[i];
-				if (!w) continue;
-				if (w.method === m.method && w.sessionId === m.sessionId) {
-					this.waiters.splice(i, 1);
-					w.resolve(m.params ?? {});
-				}
+			this.resolveWaiters(m.method, m.sessionId, m.params ?? {});
+		}
+	}
+
+	/**
+	 * RPC 応答で pending を解決する
+	 */
+	private settlePending(
+		id: number,
+		result: Record<string, unknown> | undefined,
+		error: { message: string } | undefined,
+	): void {
+		const p = this.pending.get(id);
+		if (!p) return;
+		this.pending.delete(id);
+		if (error) {
+			p.reject(new Error(error.message));
+		} else {
+			p.resolve(result ?? {});
+		}
+	}
+
+	/**
+	 * 一致するイベント待ちを 1 件解決する
+	 */
+	private resolveWaiters(
+		method: string,
+		sessionId: string | undefined,
+		params: Record<string, unknown>,
+	): void {
+		for (let i = this.waiters.length - 1; i >= 0; i--) {
+			const w = this.waiters[i];
+			if (!w) continue;
+			if (w.method === method && w.sessionId === sessionId) {
+				this.waiters.splice(i, 1);
+				w.resolve(params);
 			}
 		}
 	}
