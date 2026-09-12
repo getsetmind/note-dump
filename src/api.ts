@@ -11,6 +11,16 @@ const UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36";
 
 /**
+ * note.com のオリジン
+ */
+const NOTE_ORIGIN = "https://note.com";
+
+/**
+ * note.com へのリクエストに付ける Referer
+ */
+const NOTE_REFERER = `${NOTE_ORIGIN}/`;
+
+/**
  * 暴走を防ぐための購入済み API のページング上限
  */
 const MAX_PURCHASE_PAGES = 200;
@@ -50,6 +60,15 @@ export interface NoteDetail {
 }
 
 /**
+ * HTTP ステータスが 2xx でない場合に URL 付きで throw する
+ */
+function assertOk(res: Response, url: string): void {
+	if (!res.ok) {
+		throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
+	}
+}
+
+/**
  * Cookie 付き fetch、直列スロットリング、zod 検証を担う薄いクライアント
  */
 export class NoteClient {
@@ -76,27 +95,41 @@ export class NoteClient {
 	}
 
 	/**
+	 * スロットリングしつつ fetch し、非 2xx なら URL 付きで throw する
+	 */
+	private async request(
+		url: string,
+		headers: Record<string, string>,
+		timeoutMs: number,
+	): Promise<Response> {
+		await this.throttle();
+		const res = await fetch(url, {
+			headers,
+			redirect: "follow",
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+		assertOk(res, url);
+		return res;
+	}
+
+	/**
 	 * Cookie/UA/Referer 付きで GET してテキストを返す
 	 */
 	async getText(
 		url: string,
 		accept = "text/html,application/json",
 	): Promise<string> {
-		await this.throttle();
-		const res = await fetch(url, {
-			headers: {
+		const res = await this.request(
+			url,
+			{
 				Cookie: this.cookie,
 				"User-Agent": UA,
 				Accept: accept,
 				"Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
-				Referer: "https://note.com/",
+				Referer: NOTE_REFERER,
 			},
-			redirect: "follow",
-			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-		});
-		if (!res.ok) {
-			throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
-		}
+			REQUEST_TIMEOUT_MS,
+		);
 		return await res.text();
 	}
 
@@ -113,15 +146,11 @@ export class NoteClient {
 	 * 画像など Cookie 不要なバイナリを取得する
 	 */
 	async fetchBinary(url: string): Promise<{ buf: ArrayBuffer; type: string }> {
-		await this.throttle();
-		const res = await fetch(url, {
-			headers: { "User-Agent": UA, Referer: "https://note.com/" },
-			redirect: "follow",
-			signal: AbortSignal.timeout(BINARY_TIMEOUT_MS),
-		});
-		if (!res.ok) {
-			throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
-		}
+		const res = await this.request(
+			url,
+			{ "User-Agent": UA, Referer: NOTE_REFERER },
+			BINARY_TIMEOUT_MS,
+		);
 		const buf = await res.arrayBuffer();
 		const type = res.headers.get("content-type") ?? "application/octet-stream";
 		return { buf, type };
@@ -132,7 +161,7 @@ export class NoteClient {
 	 * スキーマ不一致時は zod のエラーメッセージごと throw する
 	 */
 	async fetchNote(key: string): Promise<NoteDetail> {
-		const url = `https://note.com/api/v3/notes/${key}`;
+		const url = `${NOTE_ORIGIN}/api/v3/notes/${key}`;
 		const json = await this.getJSON(url);
 		const parsed = NoteDetailResponseSchema.safeParse(json);
 		if (!parsed.success) {
@@ -164,8 +193,7 @@ export class NoteClient {
 		const collected: NoteRef[] = [];
 		const seen = new Set<string>();
 
-		const endpoint =
-			"https://note.com/api/v3/payments/purchase_notes?note_intro_only=true";
+		const endpoint = `${NOTE_ORIGIN}/api/v3/payments/purchase_notes?note_intro_only=true`;
 		let page = 1;
 		while (page <= MAX_PURCHASE_PAGES) {
 			const url = `${endpoint}&page=${page}`;
@@ -227,8 +255,8 @@ function parseRef(item: unknown): NoteRef | undefined {
 	const url =
 		note.note_url ??
 		(urlname
-			? `https://note.com/${urlname}/n/${note.key}`
-			: `https://note.com/n/${note.key}`);
+			? `${NOTE_ORIGIN}/${urlname}/n/${note.key}`
+			: `${NOTE_ORIGIN}/n/${note.key}`);
 	return {
 		key: note.key,
 		url,

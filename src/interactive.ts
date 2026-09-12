@@ -5,11 +5,6 @@ import { runDump } from "./dump";
 import type { Format } from "./schemas";
 
 /**
- * トップメニューの選択肢
- */
-type MenuChoice = "auto" | "args" | "file" | "cookie" | "settings" | "exit";
-
-/**
  * ダンプ系メニューで共通に聞く出力オプション
  */
 interface DumpOptions {
@@ -17,6 +12,15 @@ interface DumpOptions {
 	youtubeDl: boolean;
 	concurrency: number;
 	limit: number | undefined;
+}
+
+/**
+ * トップメニューの 1 項目
+ */
+interface MenuItem {
+	value: string;
+	label: string;
+	run: () => Promise<void> | void;
 }
 
 /**
@@ -31,48 +35,67 @@ function bailIfCancelled<T>(value: T | symbol): asserts value is T {
 }
 
 /**
+ * プロンプトの結果を待ち、キャンセルされていれば終了する
+ */
+async function ask<T>(prompt: Promise<T | symbol>): Promise<T> {
+	const value = await prompt;
+	bailIfCancelled(value);
+	return value;
+}
+
+/**
+ * 1 以上の整数として解釈できる値を返す
+ * 解釈できない場合は undefined
+ */
+function parsePositiveInt(value: string | undefined): number | undefined {
+	const n = Number(value);
+	return Number.isFinite(n) && n >= 1 ? n : undefined;
+}
+
+/**
  * format/youtube-dl/concurrency/limit を順に聞く
  */
 async function askDumpOptions(): Promise<DumpOptions> {
-	const format = await p.select<Format>({
-		message: "出力フォーマット",
-		options: [
-			{ value: "md", label: "Markdown のみ", hint: "既定" },
-			{ value: "html", label: "HTML のみ (CDP 必要)" },
-			{ value: "both", label: "両方" },
-		],
-		initialValue: "md",
-	});
-	bailIfCancelled(format);
+	const format = await ask(
+		p.select<Format>({
+			message: "出力フォーマット",
+			options: [
+				{ value: "md", label: "Markdown のみ", hint: "既定" },
+				{ value: "html", label: "HTML のみ (CDP 必要)" },
+				{ value: "both", label: "両方" },
+			],
+			initialValue: "md",
+		}),
+	);
 
-	const youtubeDl = await p.confirm({
-		message: "YouTube 埋め込みを yt-dlp でローカル保存する?",
-		initialValue: false,
-	});
-	bailIfCancelled(youtubeDl);
+	const youtubeDl = await ask(
+		p.confirm({
+			message: "YouTube 埋め込みを yt-dlp でローカル保存する?",
+			initialValue: false,
+		}),
+	);
 
-	const concurrency = await p.text({
-		message: "並行数",
-		initialValue: "2",
-		validate: (v) => {
-			const n = Number(v);
-			if (!Number.isFinite(n) || n < 1) return "1 以上の整数を入れてください";
-			return undefined;
-		},
-	});
-	bailIfCancelled(concurrency);
+	const concurrency = await ask(
+		p.text({
+			message: "並行数",
+			initialValue: "2",
+			validate: (v) =>
+				parsePositiveInt(v) === undefined
+					? "1 以上の整数を入れてください"
+					: undefined,
+		}),
+	);
 
-	const limit = await p.text({
-		message: "件数上限 (空欄で無制限)",
-		placeholder: "例: 5",
-		validate: (v) => {
-			if (v === "") return undefined;
-			const n = Number(v);
-			if (!Number.isFinite(n) || n < 1) return "1 以上の整数 or 空欄";
-			return undefined;
-		},
-	});
-	bailIfCancelled(limit);
+	const limit = await ask(
+		p.text({
+			message: "件数上限 (空欄で無制限)",
+			placeholder: "例: 5",
+			validate: (v) =>
+				v === "" || parsePositiveInt(v) !== undefined
+					? undefined
+					: "1 以上の整数 or 空欄",
+		}),
+	);
 
 	return {
 		format,
@@ -115,8 +138,9 @@ async function confirmAndRun(
 	modeArgv: string[],
 ): Promise<void> {
 	const opts = await askDumpOptions();
-	const ok = await p.confirm({ message: confirmMessage, initialValue: true });
-	bailIfCancelled(ok);
+	const ok = await ask(
+		p.confirm({ message: confirmMessage, initialValue: true }),
+	);
 	if (!ok) return;
 	await runDump([...modeArgv, ...optionsToArgv(opts)]);
 }
@@ -132,13 +156,14 @@ async function flowAuto(): Promise<void> {
  * 入力欄に貼り付けた URL/key を positional として dump.ts に流す
  */
 async function flowArgs(): Promise<void> {
-	const raw = await p.text({
-		message: "URL or note key を入力 (空白/カンマ/改行で区切り)",
-		placeholder: "https://note.com/<user>/n/<key>  または  n123abc",
-		validate: (v) => (v?.trim() ? undefined : "1 つ以上指定してください"),
-	});
-	bailIfCancelled(raw);
-	const inputs = splitInputs(raw);
+	const rawInput = await ask(
+		p.text({
+			message: "URL or note key を入力 (空白/カンマ/改行で区切り)",
+			placeholder: "https://note.com/<user>/n/<key>  または  n123abc",
+			validate: (v) => (v?.trim() ? undefined : "1 つ以上指定してください"),
+		}),
+	);
+	const inputs = splitInputs(rawInput);
 	if (inputs.length === 0) {
 		p.log.error("有効な入力が 0 件でした");
 		return;
@@ -152,11 +177,12 @@ async function flowArgs(): Promise<void> {
  * ファイルの存在チェックは dump.ts 側 (readUrlsFile) に任せる
  */
 async function flowFile(): Promise<void> {
-	const path = await p.text({
-		message: "URL リストファイルのパス",
-		initialValue: "./urls.txt",
-	});
-	bailIfCancelled(path);
+	const path = await ask(
+		p.text({
+			message: "URL リストファイルのパス",
+			initialValue: "./urls.txt",
+		}),
+	);
 	await confirmAndRun(`${path} を読み込んで dump する?`, [
 		"--mode=file",
 		`--urls=${path}`,
@@ -168,12 +194,13 @@ async function flowFile(): Promise<void> {
  * 完了後 process.env.NOTE_COOKIE は更新されないため、利用には対話 CLI の再起動が必要
  */
 async function flowCookie(): Promise<void> {
-	const ok = await p.confirm({
-		message:
-			"localhost:9222 で起動中の Chrome (--remote-debugging-port) から Cookie を取得します。続行する?",
-		initialValue: true,
-	});
-	bailIfCancelled(ok);
+	const ok = await ask(
+		p.confirm({
+			message:
+				"localhost:9222 で起動中の Chrome (--remote-debugging-port) から Cookie を取得します。続行する?",
+			initialValue: true,
+		}),
+	);
 	if (!ok) return;
 
 	const s = p.spinner();
@@ -215,42 +242,44 @@ function flowSettings(): void {
 }
 
 /**
+ * 何もしないハンドラ (exit は step() の戻り値側でループを抜ける)
+ */
+function noop(): void {
+	// exit の判定は step() の戻り値側で行う
+}
+
+/**
+ * トップメニューの選択肢
+ * ラベルと実行するフローを 1 箇所にまとめて持つ
+ */
+const MENU = [
+	{ value: "auto", label: "全件ダンプ (購入済みを自動取得)", run: flowAuto },
+	{ value: "args", label: "URL / note key を指定してダンプ", run: flowArgs },
+	{ value: "file", label: "urls.txt から読み込みダンプ", run: flowFile },
+	{ value: "cookie", label: "Cookie を更新 (CDP 経由)", run: flowCookie },
+	{ value: "settings", label: "設定を確認", run: flowSettings },
+	{ value: "exit", label: "終了", run: noop },
+] as const satisfies readonly MenuItem[];
+
+/**
+ * トップメニューの選択値
+ */
+type MenuChoice = (typeof MENU)[number]["value"];
+
+/**
  * トップメニュー 1 ターンぶんを処理する
  * "exit" を返したらループを終了する
  */
 async function step(): Promise<MenuChoice> {
-	const choice = await p.select<MenuChoice>({
-		message: "メニュー",
-		options: [
-			{ value: "auto", label: "全件ダンプ (購入済みを自動取得)" },
-			{ value: "args", label: "URL / note key を指定してダンプ" },
-			{ value: "file", label: "urls.txt から読み込みダンプ" },
-			{ value: "cookie", label: "Cookie を更新 (CDP 経由)" },
-			{ value: "settings", label: "設定を確認" },
-			{ value: "exit", label: "終了" },
-		],
-	});
-	bailIfCancelled(choice);
+	const choice = await ask(
+		p.select<MenuChoice>({
+			message: "メニュー",
+			options: MENU.map(({ value, label }) => ({ value, label })),
+		}),
+	);
 	try {
-		switch (choice) {
-			case "auto":
-				await flowAuto();
-				break;
-			case "args":
-				await flowArgs();
-				break;
-			case "file":
-				await flowFile();
-				break;
-			case "cookie":
-				await flowCookie();
-				break;
-			case "settings":
-				flowSettings();
-				break;
-			case "exit":
-				break;
-		}
+		const item = MENU.find((entry) => entry.value === choice);
+		if (item) await item.run();
 	} catch (e) {
 		p.log.error((e as Error).message);
 	}
@@ -270,7 +299,9 @@ async function main(): Promise<void> {
 	p.outro("また使ってください");
 }
 
-main().catch((e: Error) => {
-	console.error(e.stack ?? e.message);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((e: Error) => {
+		console.error(e.stack ?? e.message);
+		process.exit(1);
+	});
+}

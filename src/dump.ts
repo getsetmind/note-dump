@@ -137,6 +137,27 @@ async function writeRenderedHtml(
 }
 
 /**
+ * dumpOne の結果を 1 行サマリに整形する
+ */
+function describeResult(
+	wantMd: boolean,
+	imageCount: number,
+	htmlResult: { ok: boolean; images: number } | undefined,
+	youtubeDl: boolean,
+	youtubeCount: number,
+): string {
+	const parts: string[] = [];
+	if (wantMd) parts.push(`images: ${imageCount}`);
+	if (htmlResult) {
+		parts.push(
+			`html: ${htmlResult.ok ? `ok (+${htmlResult.images} img)` : "fail"}`,
+		);
+	}
+	if (youtubeDl) parts.push(`youtube: ${youtubeCount}`);
+	return parts.join(", ");
+}
+
+/**
  * 1 記事ぶんの取得と Markdown / HTML / 動画の書き出しをまとめて実行する
  */
 async function dumpOne(
@@ -171,15 +192,14 @@ async function dumpOne(
 		? await writeRenderedHtml(detail, ref, cfg, dir, client, imageCache)
 		: undefined;
 
-	const parts: string[] = [];
-	if (wantMd) parts.push(`images: ${imageCount}`);
-	if (htmlResult) {
-		parts.push(
-			`html: ${htmlResult.ok ? `ok (+${htmlResult.images} img)` : "fail"}`,
-		);
-	}
-	if (cfg.youtubeDl) parts.push(`youtube: ${ytCount}`);
-	console.log(`  -> ${dir}  (${parts.join(", ")})`);
+	const summary = describeResult(
+		wantMd,
+		imageCount,
+		htmlResult,
+		cfg.youtubeDl,
+		ytCount,
+	);
+	console.log(`  -> ${dir}  (${summary})`);
 }
 
 /**
@@ -236,8 +256,8 @@ function readUrlsFile(path: string): NoteRef[] {
 		throw e;
 	}
 	const refs: NoteRef[] = [];
-	for (const raw of text.split(/\r?\n/)) {
-		const line = raw.trim();
+	for (const rawLine of text.split(/\r?\n/)) {
+		const line = rawLine.trim();
 		if (line === "" || line.startsWith("#")) continue;
 		const ref = refFromInput(line);
 		if (!ref) {
@@ -250,6 +270,76 @@ function readUrlsFile(path: string): NoteRef[] {
 }
 
 /**
+ * args モードの positional 引数を NoteRef に変換する
+ * 解釈できない値は warn してスキップする
+ */
+function refsFromArgs(positional: string[]): NoteRef[] {
+	const refs: NoteRef[] = [];
+	for (const a of positional) {
+		const ref = refFromInput(a);
+		if (!ref) {
+			console.warn(`[dump] 無視 (URL/key として解釈不能): ${a}`);
+			continue;
+		}
+		refs.push(ref);
+	}
+	console.log(`[dump] args モード: ${refs.length} 件`);
+	return refs;
+}
+
+/**
+ * file モードの URL リストを読み込み、件数を表示する
+ */
+function refsFromUrlsFile(path: string): NoteRef[] {
+	const refs = readUrlsFile(path);
+	console.log(`[dump] file モード: ${refs.length} 件`);
+	return refs;
+}
+
+/**
+ * auto モードで購入済み一覧を取得し、_index.json に保存する
+ */
+async function refsFromPurchases(
+	client: NoteClient,
+	outDir: string,
+): Promise<NoteRef[]> {
+	console.log("[dump] auto モード: 購入済み一覧を取得中…");
+	const refs = await client.fetchPurchasedKeys();
+	console.log(`[dump] 取得: ${refs.length} 件`);
+	const indexPath = join(outDir, "_index.json");
+	await writeFile(indexPath, JSON.stringify(refs, null, 2), "utf8");
+	return refs;
+}
+
+/**
+ * mode に応じてダンプ対象の NoteRef を集める
+ */
+async function resolveRefs(
+	cfg: Config,
+	client: NoteClient,
+): Promise<NoteRef[]> {
+	if (cfg.mode === "args") return refsFromArgs(cfg.positional);
+	if (cfg.mode === "file") return refsFromUrlsFile(cfg.urlsFile);
+	return await refsFromPurchases(client, cfg.outDir);
+}
+
+/**
+ * 対象を並行ダンプし、進捗を表示する
+ */
+async function dumpAll(
+	client: NoteClient,
+	refs: NoteRef[],
+	cfg: Config,
+): Promise<void> {
+	let done = 0;
+	await runWithConcurrency(refs, cfg.concurrency, async (ref) => {
+		done++;
+		console.log(`[${done}/${refs.length}] ${ref.key} ${ref.title ?? ""}`);
+		await dumpOne(client, ref, cfg);
+	});
+}
+
+/**
  * CLI エントリポイント
  * 設定読み込み、対象列挙、並行ダンプの順に実行する
  */
@@ -258,44 +348,17 @@ export async function runDump(argv: string[]): Promise<void> {
 	const client = new NoteClient(cfg.cookie, cfg.requestDelayMs);
 	await mkdir(cfg.outDir, { recursive: true });
 
-	let refs: NoteRef[];
-	if (cfg.mode === "args") {
-		refs = [];
-		for (const a of cfg.positional) {
-			const ref = refFromInput(a);
-			if (!ref) {
-				console.warn(`[dump] 無視 (URL/key として解釈不能): ${a}`);
-				continue;
-			}
-			refs.push(ref);
-		}
-		console.log(`[dump] args モード: ${refs.length} 件`);
-	} else if (cfg.mode === "file") {
-		refs = readUrlsFile(cfg.urlsFile);
-		console.log(`[dump] file モード: ${refs.length} 件`);
-	} else {
-		console.log("[dump] auto モード: 購入済み一覧を取得中…");
-		refs = await client.fetchPurchasedKeys();
-		console.log(`[dump] 取得: ${refs.length} 件`);
-		const indexPath = join(cfg.outDir, "_index.json");
-		await writeFile(indexPath, JSON.stringify(refs, null, 2), "utf8");
-	}
+	const refs = await resolveRefs(cfg, client);
+	const targets = cfg.limit !== undefined ? refs.slice(0, cfg.limit) : refs;
 
-	if (cfg.limit !== undefined) refs = refs.slice(0, cfg.limit);
-
-	if (refs.length === 0) {
+	if (targets.length === 0) {
 		console.log(
 			"[dump] 対象0件。auto で取れない場合は --mode=file --urls=urls.txt を試してください。",
 		);
 		return;
 	}
 
-	let done = 0;
-	await runWithConcurrency(refs, cfg.concurrency, async (ref) => {
-		done++;
-		console.log(`[${done}/${refs.length}] ${ref.key} ${ref.title ?? ""}`);
-		await dumpOne(client, ref, cfg);
-	});
+	await dumpAll(client, targets, cfg);
 
 	console.log(`[dump] 完了。出力先: ${cfg.outDir}`);
 }

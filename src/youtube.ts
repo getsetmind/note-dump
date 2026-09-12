@@ -1,67 +1,74 @@
 import { mkdir, readdir } from "node:fs/promises";
-import { parse as parseHTML } from "node-html-parser";
+import { extname } from "node:path";
+import { type HTMLElement, parse as parseHTML } from "node-html-parser";
 
 /**
- * 本文 HTML から YouTube 動画 URL を重複なく抽出する
+ * 相対 URL を解決するときの基準オリジン
  */
-export function extractYoutubeUrls(bodyHtml: string): string[] {
-	const root = parseHTML(bodyHtml);
-	const out = new Set<string>();
-	// note.com の埋め込みは <figure data-src="..." embedded-service="youtube"> 形式
-	for (const el of root.querySelectorAll('[embedded-service="youtube"]')) {
-		const src = el.getAttribute("data-src") ?? el.getAttribute("src") ?? "";
-		if (src && isYoutube(src)) out.add(normalizeYoutube(src));
+const URL_BASE = "https://note.com";
+
+/**
+ * note.com が YouTube 埋め込みに使う figure のセレクタ
+ */
+const YOUTUBE_EMBED_SELECTOR = '[embedded-service="youtube"]';
+
+/**
+ * URL を基準オリジンで解決する
+ * 解釈できない場合は undefined を返す
+ */
+function parseUrl(url: string): URL | undefined {
+	try {
+		return new URL(url, URL_BASE);
+	} catch {
+		return undefined;
 	}
-	// 一般的な iframe/embed 直書き (他サイトからのコピペ等)
-	for (const el of root.querySelectorAll("iframe, embed")) {
-		const src = el.getAttribute("src") ?? "";
-		if (src && isYoutube(src)) out.add(normalizeYoutube(src));
-	}
-	// 本文内のテキストリンク
-	for (const a of root.querySelectorAll("a")) {
-		const href = a.getAttribute("href") ?? "";
-		if (href && isYoutube(href)) out.add(normalizeYoutube(href));
-	}
-	return Array.from(out);
 }
 
 /**
- * YouTube のホストかどうかを判定する
+ * ホスト名から先頭の www. を除く
  */
-function isYoutube(url: string): boolean {
-	try {
-		const u = new URL(url, "https://note.com");
-		const h = u.hostname.replace(/^www\./, "");
-		return (
-			h === "youtube.com" ||
-			h === "youtu.be" ||
-			h === "youtube-nocookie.com" ||
-			h.endsWith(".youtube.com")
-		);
-	} catch {
-		return false;
-	}
+function stripWww(hostname: string): string {
+	return hostname.replace(/^www\./, "");
+}
+
+/**
+ * pathname から prefix 直後の最初のパス要素を取り出す
+ * 取り出せない場合は undefined を返す
+ */
+function pathSegment(pathname: string, prefix: string): string | undefined {
+	return pathname.slice(prefix.length).split("/")[0] || undefined;
 }
 
 /**
  * URL から YouTube 動画 ID を抽出する
  */
 export function extractYoutubeId(url: string): string | undefined {
-	try {
-		const u = new URL(url, "https://note.com");
-		const h = u.hostname.replace(/^www\./, "");
-		if (h === "youtu.be") return u.pathname.slice(1).split("/")[0] || undefined;
-		if (u.pathname.startsWith("/embed/")) {
-			return u.pathname.slice("/embed/".length).split("/")[0] || undefined;
-		}
-		if (u.pathname.startsWith("/shorts/")) {
-			return u.pathname.slice("/shorts/".length).split("/")[0] || undefined;
-		}
-		if (u.pathname === "/watch") return u.searchParams.get("v") ?? undefined;
-		return undefined;
-	} catch {
-		return undefined;
+	const u = parseUrl(url);
+	if (!u) return undefined;
+	if (stripWww(u.hostname) === "youtu.be") return pathSegment(u.pathname, "/");
+	if (u.pathname.startsWith("/embed/")) {
+		return pathSegment(u.pathname, "/embed/");
 	}
+	if (u.pathname.startsWith("/shorts/")) {
+		return pathSegment(u.pathname, "/shorts/");
+	}
+	if (u.pathname === "/watch") return u.searchParams.get("v") ?? undefined;
+	return undefined;
+}
+
+/**
+ * YouTube のホストかどうかを判定する
+ */
+function isYoutube(url: string): boolean {
+	const u = parseUrl(url);
+	if (!u) return false;
+	const host = stripWww(u.hostname);
+	return (
+		host === "youtube.com" ||
+		host === "youtu.be" ||
+		host === "youtube-nocookie.com" ||
+		host.endsWith(".youtube.com")
+	);
 }
 
 /**
@@ -71,6 +78,49 @@ function normalizeYoutube(url: string): string {
 	const id = extractYoutubeId(url);
 	if (id) return `https://www.youtube.com/watch?v=${id}`;
 	return url;
+}
+
+/**
+ * 要素が持つ属性のうち、最初に定義されている値を返す
+ * すべて未定義なら空文字を返す
+ */
+function pickAttribute(el: HTMLElement, attributes: string[]): string {
+	for (const name of attributes) {
+		const value = el.getAttribute(name);
+		if (value !== undefined) return value;
+	}
+	return "";
+}
+
+/**
+ * 指定セレクタの要素から YouTube URL を重複なく集める
+ * attributes は先に書いた属性を優先する
+ */
+function collectYoutubeUrls(
+	root: HTMLElement,
+	selector: string,
+	attributes: string[],
+	out: Set<string>,
+): void {
+	for (const el of root.querySelectorAll(selector)) {
+		const raw = pickAttribute(el, attributes);
+		if (raw && isYoutube(raw)) out.add(normalizeYoutube(raw));
+	}
+}
+
+/**
+ * 本文 HTML から YouTube 動画 URL を重複なく抽出する
+ */
+export function extractYoutubeUrls(bodyHtml: string): string[] {
+	const root = parseHTML(bodyHtml);
+	const out = new Set<string>();
+	// note.com の埋め込みは <figure data-src="..." embedded-service="youtube"> 形式
+	collectYoutubeUrls(root, YOUTUBE_EMBED_SELECTOR, ["data-src", "src"], out);
+	// 一般的な iframe/embed 直書き (他サイトからのコピペ等)
+	collectYoutubeUrls(root, "iframe, embed", ["src"], out);
+	// 本文内のテキストリンク
+	collectYoutubeUrls(root, "a", ["href"], out);
+	return Array.from(out);
 }
 
 /**
@@ -135,17 +185,17 @@ export async function downloadYoutubeAll(
 		return 0;
 	}
 	await mkdir(outDir, { recursive: true });
-	let ok = 0;
+	let downloaded = 0;
 	for (const url of urls) {
 		try {
 			await runYtDlp(url, outDir);
-			ok++;
+			downloaded++;
 			// biome-ignore lint/plugin: 1本の失敗で残りの動画取得を止めない
 		} catch (e) {
 			console.warn(`  [yt-dlp] ${url} 失敗: ${(e as Error).message}`);
 		}
 	}
-	return ok;
+	return downloaded;
 }
 
 /**
@@ -162,12 +212,24 @@ export async function buildLocalVideoMap(
 	} catch {
 		return map;
 	}
-	for (const f of files) {
-		const dot = f.lastIndexOf(".");
-		const id = dot > 0 ? f.slice(0, dot) : f;
-		if (id) map.set(id, f);
+	for (const file of files) {
+		const ext = extname(file);
+		const id = ext ? file.slice(0, -ext.length) : file;
+		if (id) map.set(id, file);
 	}
 	return map;
+}
+
+/**
+ * ローカルの <video> と元動画リンクからなる埋め込み HTML を組み立てる
+ */
+function localEmbedHtml(
+	id: string,
+	file: string,
+	videosDirRel: string,
+): string {
+	const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+	return `<div class="local-yt-embed" style="margin:1em 0"><video controls preload="metadata" src="${videosDirRel}/${file}" style="max-width:100%;display:block"></video><p style="margin:.4em 0;font-size:.9em"><a href="${watchUrl}" target="_blank" rel="noopener">YouTube で開く</a></p></div>`;
 }
 
 /**
@@ -183,28 +245,24 @@ export function rewriteYoutubeEmbedsToLocal(
 	const root = parseHTML(html);
 	let replaced = 0;
 
-	const swap = (id: string): string => {
+	const replacementFor = (id: string): string => {
 		const file = fileMap.get(id);
 		if (!file) return "";
-		const watchUrl = `https://www.youtube.com/watch?v=${id}`;
-		return `<div class="local-yt-embed" style="margin:1em 0"><video controls preload="metadata" src="${videosDirRel}/${file}" style="max-width:100%;display:block"></video><p style="margin:.4em 0;font-size:.9em"><a href="${watchUrl}" target="_blank" rel="noopener">YouTube で開く</a></p></div>`;
+		return localEmbedHtml(id, file, videosDirRel);
 	};
 
-	for (const el of root.querySelectorAll("iframe, embed")) {
-		const src = el.getAttribute("src") ?? "";
-		const id = extractYoutubeId(src);
-		if (!id || !fileMap.has(id)) continue;
-		el.replaceWith(swap(id));
-		replaced++;
-	}
+	const replaceEmbeds = (selector: string, attributes: string[]): void => {
+		for (const el of root.querySelectorAll(selector)) {
+			const id = extractYoutubeId(pickAttribute(el, attributes));
+			if (!id || !fileMap.has(id)) continue;
+			el.replaceWith(replacementFor(id));
+			replaced++;
+		}
+	};
+
+	replaceEmbeds("iframe, embed", ["src"]);
 	// note.com の <figure embedded-service="youtube" data-src="..."> も置換
-	for (const el of root.querySelectorAll('[embedded-service="youtube"]')) {
-		const src = el.getAttribute("data-src") ?? el.getAttribute("src") ?? "";
-		const id = extractYoutubeId(src);
-		if (!id || !fileMap.has(id)) continue;
-		el.replaceWith(swap(id));
-		replaced++;
-	}
+	replaceEmbeds(YOUTUBE_EMBED_SELECTOR, ["data-src", "src"]);
 
 	return replaced > 0 ? root.toString() : html;
 }

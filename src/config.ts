@@ -6,25 +6,73 @@ import { type Config, ConfigSchema } from "./schemas";
 export type { Config };
 
 /**
+ * .env の 1 行から取り出した key と値
+ */
+interface DotenvEntry {
+	key: string;
+	value: string;
+}
+
+/**
+ * --key=value / --flag 形式の argv を分解した結果
+ */
+interface ParsedArgs {
+	flags: Record<string, string>;
+	positional: string[];
+}
+
+/**
+ * フラグも環境変数も無い場合に使う既定値
+ */
+const DEFAULTS = {
+	outDir: "./out",
+	urlsFile: "./urls.txt",
+	concurrency: "2",
+	requestDelayMs: "600",
+	format: "md",
+	cdpUrl: "http://localhost:9222",
+} as const;
+
+/**
+ * .env の全行を key/value の配列へ分解する
+ * 空行、'#' 始まりのコメント行、'=' を含まない行は無視する
+ */
+function parseDotenv(text: string): DotenvEntry[] {
+	const entries: DotenvEntry[] = [];
+	for (const rawLine of text.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (line === "" || line.startsWith("#")) continue;
+		const eq = line.indexOf("=");
+		if (eq < 0) continue;
+		const key = line
+			.slice(0, eq)
+			.trim()
+			.replace(/^export\s+/, "");
+		if (key === "") continue;
+		entries.push({ key, value: unquote(line.slice(eq + 1).trim()) });
+	}
+	return entries;
+}
+
+/**
+ * 値が同じ引用符で囲まれていれば外す
+ * 片側だけの引用符は値の一部として残す
+ */
+function unquote(value: string): string {
+	const quote = value.charAt(0);
+	if ((quote === '"' || quote === "'") && value.endsWith(quote)) {
+		return value.slice(1, -1);
+	}
+	return value;
+}
+
+/**
  * .env を行単位でパースして process.env に流し込む
  * 既に環境変数として存在するキーは上書きしない
  */
 export function loadDotenv(path: string): void {
 	if (!existsSync(path)) return;
-	const text = readFileSync(path, "utf8");
-	for (const raw of text.split(/\r?\n/)) {
-		const line = raw.trim();
-		if (line === "" || line.startsWith("#")) continue;
-		const eq = line.indexOf("=");
-		if (eq < 0) continue;
-		const key = line.slice(0, eq).trim();
-		let value = line.slice(eq + 1).trim();
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1);
-		}
+	for (const { key, value } of parseDotenv(readFileSync(path, "utf8"))) {
 		if (!(key in process.env)) {
 			process.env[key] = value;
 		}
@@ -33,26 +81,64 @@ export function loadDotenv(path: string): void {
 
 /**
  * --key=value / --flag 形式の argv を分解する
+ * 値を持たないフラグは "true" として扱う
  */
-function parseArgs(argv: string[]): {
-	flags: Record<string, string>;
-	positional: string[];
-} {
+function parseArgs(argv: string[]): ParsedArgs {
 	const flags: Record<string, string> = {};
 	const positional: string[] = [];
-	for (const a of argv) {
-		if (!a.startsWith("--")) {
-			positional.push(a);
+	for (const arg of argv) {
+		if (!arg.startsWith("--")) {
+			positional.push(arg);
 			continue;
 		}
-		const eq = a.indexOf("=");
+		const eq = arg.indexOf("=");
 		if (eq < 0) {
-			flags[a.slice(2)] = "true";
+			flags[arg.slice(2)] = "true";
 		} else {
-			flags[a.slice(2, eq)] = a.slice(eq + 1);
+			flags[arg.slice(2, eq)] = arg.slice(eq + 1);
 		}
 	}
 	return { flags, positional };
+}
+
+/**
+ * CLI フラグ、環境変数、既定値の順に文字列設定を解決する
+ * 別名のフラグは先に指定したものほど優先する
+ */
+function pickSetting(
+	flags: Record<string, string>,
+	flagNames: readonly string[],
+	envName: string,
+	fallback: string,
+): string {
+	for (const name of flagNames) {
+		const value = flags[name];
+		if (value !== undefined) return value;
+	}
+	return process.env[envName] ?? fallback;
+}
+
+/**
+ * --mode の指定を優先し、無ければ positional の有無からモードを推測する
+ * 値の妥当性は ConfigSchema が検証する
+ */
+function inferMode(
+	explicitMode: string | undefined,
+	positional: string[],
+): string {
+	return explicitMode ?? (positional.length > 0 ? "args" : "auto");
+}
+
+/**
+ * YouTube 埋め込みのローカル保存が有効かを返す
+ * --youtube-dl / --youtubeDl / YOUTUBE_DL のいずれかが "true" なら有効
+ */
+function resolveYoutubeDl(flags: Record<string, string>): boolean {
+	return (
+		flags["youtube-dl"] === "true" ||
+		flags.youtubeDl === "true" ||
+		process.env.YOUTUBE_DL === "true"
+	);
 }
 
 /**
@@ -72,25 +158,28 @@ export function loadConfig(argv: string[]): Config {
 	loadDotenv(resolve(process.cwd(), ".env"));
 	const { flags, positional } = parseArgs(argv);
 
-	const explicitMode = flags.mode;
-	const inferredMode =
-		explicitMode ?? (positional.length > 0 ? "args" : "auto");
-
 	const raw = {
 		cookie: process.env.NOTE_COOKIE ?? "",
-		outDir: resolve(flags.out ?? process.env.OUT_DIR ?? "./out"),
-		concurrency: flags.concurrency ?? process.env.CONCURRENCY ?? "2",
-		requestDelayMs: flags.delay ?? process.env.REQUEST_DELAY_MS ?? "600",
-		mode: inferredMode,
-		urlsFile: resolve(flags.urls ?? "./urls.txt"),
+		outDir: resolve(pickSetting(flags, ["out"], "OUT_DIR", DEFAULTS.outDir)),
+		concurrency: pickSetting(
+			flags,
+			["concurrency"],
+			"CONCURRENCY",
+			DEFAULTS.concurrency,
+		),
+		requestDelayMs: pickSetting(
+			flags,
+			["delay"],
+			"REQUEST_DELAY_MS",
+			DEFAULTS.requestDelayMs,
+		),
+		mode: inferMode(flags.mode, positional),
+		urlsFile: resolve(flags.urls ?? DEFAULTS.urlsFile),
 		limit: flags.limit,
 		positional,
-		format: flags.format ?? process.env.FORMAT ?? "md",
-		youtubeDl:
-			flags["youtube-dl"] === "true" ||
-			flags.youtubeDl === "true" ||
-			process.env.YOUTUBE_DL === "true",
-		cdpUrl: flags["cdp-url"] ?? process.env.CDP_URL ?? "http://localhost:9222",
+		format: pickSetting(flags, ["format"], "FORMAT", DEFAULTS.format),
+		youtubeDl: resolveYoutubeDl(flags),
+		cdpUrl: pickSetting(flags, ["cdp-url"], "CDP_URL", DEFAULTS.cdpUrl),
 	};
 
 	const parsed = ConfigSchema.safeParse(raw);

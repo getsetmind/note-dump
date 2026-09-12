@@ -36,15 +36,23 @@ function shortHash(s: string): string {
 }
 
 /**
+ * img から実際に参照すべき URL を選ぶ
+ * src が data: でないときは src、それ以外は遅延読み込み用の属性を優先する
+ */
+function pickImageSource(img: HTMLElement): string | undefined {
+	const src = img.getAttribute("src");
+	if (src && !src.startsWith("data:")) return src;
+	return (
+		img.getAttribute("data-src") ?? img.getAttribute("data-original-src") ?? src
+	);
+}
+
+/**
  * 遅延読み込み用の属性も見て画像の絶対 URL を求める
  * 解決できない場合と data: 画像の場合は undefined
  */
 function imageUrl(img: HTMLElement): string | undefined {
-	const rawSrc = img.getAttribute("src");
-	const dataSrc =
-		img.getAttribute("data-src") ?? img.getAttribute("data-original-src");
-	const src =
-		rawSrc && !rawSrc.startsWith("data:") ? rawSrc : (dataSrc ?? rawSrc);
+	const src = pickImageSource(img);
 	if (!src || src.startsWith("data:")) return undefined;
 	return src.startsWith("http") ? src : `https:${src}`;
 }
@@ -59,6 +67,27 @@ function applyLocalSrc(img: HTMLElement, filename: string): void {
 }
 
 /**
+ * 画像を DL して保存ファイル名を返す
+ * cache 済みなら DL せずその名前を返し、失敗時の処理は呼び出し側に委ねる
+ */
+async function resolveImageFilename(
+	absUrl: string,
+	imageDir: string,
+	client: NoteClient,
+	cache: Map<string, string> | undefined,
+	ensureDir: () => Promise<void>,
+): Promise<string> {
+	const cached = cache?.get(absUrl);
+	if (cached) return cached;
+	const { buf, type } = await client.fetchBinary(absUrl);
+	const filename = `${shortHash(absUrl)}${extFor(absUrl, type)}`;
+	await ensureDir();
+	await Bun.write(join(imageDir, filename), buf);
+	cache?.set(absUrl, filename);
+	return filename;
+}
+
+/**
  * 本文 HTML 内の画像を DL してローカル参照に書き換える
  * cache を渡すと同一記事内の再取得を省ける
  */
@@ -69,7 +98,6 @@ export async function downloadImagesAndRewrite(
 	cache?: Map<string, string>,
 ): Promise<{ html: string; count: number }> {
 	const root = parseHTML(bodyHtml);
-	const imgs = root.querySelectorAll("img");
 	let count = 0;
 	let dirReady = false;
 
@@ -79,24 +107,18 @@ export async function downloadImagesAndRewrite(
 		dirReady = true;
 	};
 
-	for (const img of imgs) {
+	for (const img of root.querySelectorAll("img")) {
 		const absUrl = imageUrl(img);
 		if (!absUrl) continue;
-
-		const cached = cache?.get(absUrl);
-		if (cached) {
-			applyLocalSrc(img, cached);
-			count++;
-			continue;
-		}
-
 		try {
-			const { buf, type } = await client.fetchBinary(absUrl);
-			const filename = `${shortHash(absUrl)}${extFor(absUrl, type)}`;
-			await ensureDir();
-			await Bun.write(join(imageDir, filename), buf);
+			const filename = await resolveImageFilename(
+				absUrl,
+				imageDir,
+				client,
+				cache,
+				ensureDir,
+			);
 			applyLocalSrc(img, filename);
-			cache?.set(absUrl, filename);
 			count++;
 			// biome-ignore lint/plugin: 画像1枚の失敗で記事全体を止めず、残りの画像を継続する
 		} catch (e) {

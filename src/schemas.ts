@@ -1,6 +1,17 @@
 import { z } from "zod";
 
 /**
+ * note.com のユーザー情報
+ * urlname だけを使う箇所と nickname も使う箇所があるため両方を持ち、未知フィールドは loose で残す
+ */
+const UserSchema = z
+	.object({
+		urlname: z.string().optional(),
+		nickname: z.string().optional(),
+	})
+	.loose();
+
+/**
  * note.com 購入済み API の 1 アイテム本体
  */
 const PurchasedItemInnerSchema = z
@@ -8,30 +19,27 @@ const PurchasedItemInnerSchema = z
 		key: z.string(),
 		name: z.string().optional(),
 		note_url: z.string().optional(),
-		user: z
-			.object({
-				urlname: z.string().optional(),
-			})
-			.loose()
-			.optional(),
+		user: UserSchema.optional(),
 	})
 	.loose();
+
+/**
+ * `{ note: {...} }` ラッパーなら中身を、素のオブジェクトならそのまま返す
+ */
+function unwrapPurchasedItem(raw: unknown): unknown {
+	if (typeof raw !== "object" || raw === null) return raw;
+	if (!("note" in raw)) return raw;
+	return raw.note !== undefined ? raw.note : raw;
+}
 
 /**
  * 購入済みリストの 1 行
  * `{ note: {...} }` ラッパー型と素の `{ key, ... }` 型を preprocess で吸収する
  */
-export const PurchasedItemSchema = z.preprocess((raw) => {
-	if (
-		raw !== null &&
-		typeof raw === "object" &&
-		"note" in raw &&
-		(raw as { note: unknown }).note !== undefined
-	) {
-		return (raw as { note: unknown }).note;
-	}
-	return raw;
-}, PurchasedItemInnerSchema);
+export const PurchasedItemSchema = z.preprocess(
+	unwrapPurchasedItem,
+	PurchasedItemInnerSchema,
+);
 
 /**
  * GET /api/v3/payments/purchase_notes のレスポンス
@@ -44,27 +52,26 @@ export const PurchasedListResponseSchema = z
 	.loose();
 
 /**
- * GET /api/v3/notes/:key のレスポンス
+ * GET /api/v3/notes/:key の data 本体
  * 未知フィールドは loose で raw に残す
  */
+const NoteDetailDataSchema = z
+	.object({
+		key: z.string().optional(),
+		name: z.string().optional(),
+		body: z.string().optional(),
+		created_at: z.string().optional(),
+		publish_at: z.string().optional(),
+		price: z.union([z.string(), z.number()]).optional(),
+		user: UserSchema.optional(),
+	})
+	.loose();
+
+/**
+ * GET /api/v3/notes/:key のレスポンス
+ */
 export const NoteDetailResponseSchema = z.object({
-	data: z
-		.object({
-			key: z.string().optional(),
-			name: z.string().optional(),
-			body: z.string().optional(),
-			created_at: z.string().optional(),
-			publish_at: z.string().optional(),
-			price: z.union([z.string(), z.number()]).optional(),
-			user: z
-				.object({
-					urlname: z.string().optional(),
-					nickname: z.string().optional(),
-				})
-				.loose()
-				.optional(),
-		})
-		.loose(),
+	data: NoteDetailDataSchema,
 });
 
 /**
@@ -92,7 +99,7 @@ export const ConfigSchema = z.object({
 	positional: z.array(z.string()),
 	format: FormatSchema,
 	youtubeDl: z.coerce.boolean(),
-	cdpUrl: z.string().url(),
+	cdpUrl: z.url(),
 });
 
 /**
