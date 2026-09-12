@@ -1,6 +1,7 @@
 {
 	"extends": "@yuu1111/tsconfig/bun.json",
 	"include": [
-		"src/**/*.ts"
+		"src/**/*.ts",
+		"scripts/**/*.ts"
 	]
 }
