@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { z } from "zod";
-import { type Config, ConfigSchema, type Format, type Mode } from "./schemas";
+import { type Config, ConfigSchema } from "./schemas";
 
-export type { Config, Format, Mode };
+export type { Config };
 
 /**
- * @description .env を行単位パースして process.env に流し込む
- *   既に環境変数として存在するキーは上書きしない
+ * .env を行単位でパースして process.env に流し込む
+ * 既に環境変数として存在するキーは上書きしない
  */
 export function loadDotenv(path: string): void {
 	if (!existsSync(path)) return;
@@ -32,7 +32,7 @@ export function loadDotenv(path: string): void {
 }
 
 /**
- * @description --key=value / --flag 形式の argv を分解する
+ * --key=value / --flag 形式の argv を分解する
  */
 function parseArgs(argv: string[]): {
 	flags: Record<string, string>;
@@ -56,7 +56,7 @@ function parseArgs(argv: string[]): {
 }
 
 /**
- * @description zod のエラーを CLI 向けに整形する
+ * zod のエラーを CLI 向けに整形する
  */
 function formatZodError(err: z.ZodError): string {
 	return err.issues
@@ -65,8 +65,8 @@ function formatZodError(err: z.ZodError): string {
 }
 
 /**
- * @description CLI 引数 + 環境変数から Config を組み立てて zod で検証
- *   フラグ > 環境変数 > 既定値 の優先順
+ * CLI 引数と環境変数から Config を組み立てて zod で検証する
+ * フラグ、環境変数、既定値の順に優先する
  */
 export function loadConfig(argv: string[]): Config {
 	loadDotenv(resolve(process.cwd(), ".env"));

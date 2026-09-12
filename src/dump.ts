@@ -18,7 +18,7 @@ import {
 } from "./youtube";
 
 /**
- * @description ファイル名に使えない文字を除去して 80 文字に丸める
+ * ファイル名に使えない文字を除去して 80 文字に丸める
  */
 function sanitizeFilename(s: string): string {
 	return s
@@ -29,7 +29,8 @@ function sanitizeFilename(s: string): string {
 }
 
 /**
- * @description URL or note key 文字列から NoteRef を組み立てる。解釈できなければ undefined
+ * URL または note key 文字列から NoteRef を組み立てる
+ * 解釈できない場合は undefined を返す
  */
 function refFromInput(input: string): NoteRef | undefined {
 	const key = parseUrlOrKey(input);
@@ -182,11 +183,8 @@ async function dumpOne(
 }
 
 /**
- * @description ワーカープール方式で worker を並列実行する
- *   失敗は warn でスキップして残りを継続する
- * @param items - 処理対象
- * @param limit - 同時実行数 (1 未満は 1 として扱う)
- * @param worker - 1 アイテムを処理するコールバック
+ * ワーカープール方式で worker を並列実行する
+ * limit が 1 未満の場合は 1 として扱い、失敗は warn でスキップして残りを継続する
  */
 async function runWithConcurrency<T>(
 	items: T[],
@@ -211,7 +209,8 @@ async function runWithConcurrency<T>(
 }
 
 /**
- * @description urls.txt をパースして NoteRef 列にする。空行と '#' コメントは無視
+ * urls.txt をパースして NoteRef の配列にする
+ * 空行と '#' で始まるコメント行は無視する
  */
 function readUrlsFile(path: string): NoteRef[] {
 	let text: string;
@@ -239,8 +238,8 @@ function readUrlsFile(path: string): NoteRef[] {
 }
 
 /**
- * @description CLI エントリ。設定読み込み → 対象列挙 → 並行ダンプ
- * @param argv - --key=value 形式のフラグ + positional 引数の配列
+ * CLI エントリポイント
+ * 設定読み込み、対象列挙、並行ダンプの順に実行する
  */
 export async function runDump(argv: string[]): Promise<void> {
 	const cfg = loadConfig(argv);

@@ -5,22 +5,18 @@ import {
 } from "./schemas";
 
 /**
- * @description note.com に送る User-Agent
+ * note.com に送る User-Agent
  */
 const UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36";
 
 /**
- * @description 購入済み API のページング上限。暴走防止のため
+ * 暴走を防ぐための購入済み API のページング上限
  */
 const MAX_PURCHASE_PAGES = 200;
 
 /**
- * @description 一覧取得時の最小情報
- * @property key - note key
- * @property url - 記事 URL
- * @property title - 記事タイトル @optional
- * @property creatorUrlname - 著者 urlname @optional
+ * 一覧取得時に使う最小限の記事情報
  */
 export interface NoteRef {
 	key: string;
@@ -30,15 +26,7 @@ export interface NoteRef {
 }
 
 /**
- * @description 詳細 API から正規化した記事データ
- * @property key - note key
- * @property name - 記事タイトル
- * @property body - 本文 HTML
- * @property createdAt - 作成日時 ISO 文字列 @optional
- * @property publishAt - 公開日時 ISO 文字列 @optional
- * @property user - 著者情報 (urlname/nickname) @optional
- * @property priceText - 価格表記 (数値/文字列を文字列に寄せたもの) @optional
- * @property raw - 元の API レスポンス全体 (meta.json 出力用)
+ * 詳細 API から正規化した記事データ
  */
 export interface NoteDetail {
 	key: string;
@@ -52,7 +40,7 @@ export interface NoteDetail {
 }
 
 /**
- * @description Cookie 付き fetch + 直列スロットリング + zod 検証を担う薄いクライアント
+ * Cookie 付き fetch、直列スロットリング、zod 検証を担う薄いクライアント
  */
 export class NoteClient {
 	private readonly cookie: string;
@@ -60,8 +48,7 @@ export class NoteClient {
 	private lastAt = 0;
 
 	/**
-	 * @param cookie - `Cookie` ヘッダにそのまま入れる文字列
-	 * @param delayMs - 直前リクエストから次リクエストまで挟む最小間隔
+	 * Cookie とリクエスト間隔を指定して初期化する
 	 */
 	constructor(cookie: string, delayMs: number) {
 		this.cookie = cookie;
@@ -69,7 +56,7 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description 直前リクエストから delayMs 経過するまで待つ
+	 * 直前リクエストから delayMs 経過するまで待つ
 	 */
 	private async throttle(): Promise<void> {
 		const now = Date.now();
@@ -79,7 +66,7 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description Cookie/UA/Referer 付きで GET してテキストを返す
+	 * Cookie/UA/Referer 付きで GET してテキストを返す
 	 */
 	async getText(
 		url: string,
@@ -103,7 +90,7 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description JSON を取得 (型は呼び出し側で zod 検証する想定)
+	 * JSON を取得する (型は呼び出し側で zod 検証する想定)
 	 */
 	async getJSON<T>(url: string): Promise<T> {
 		const text = await this.getText(url, "application/json");
@@ -111,7 +98,7 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description 画像など Cookie 不要なバイナリを取得する
+	 * 画像など Cookie 不要なバイナリを取得する
 	 */
 	async fetchBinary(url: string): Promise<{ buf: ArrayBuffer; type: string }> {
 		await this.throttle();
@@ -128,8 +115,8 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description 記事詳細を取得して NoteDetail に正規化する
-	 *   スキーマ不一致時は zod のエラーメッセージごと throw
+	 * 記事詳細を取得して NoteDetail に正規化する
+	 * スキーマ不一致時は zod のエラーメッセージごと throw する
 	 */
 	async fetchNote(key: string): Promise<NoteDetail> {
 		const url = `https://note.com/api/v3/notes/${key}`;
@@ -157,8 +144,8 @@ export class NoteClient {
 	}
 
 	/**
-	 * @description 購入済み一覧を全ページ取得する
-	 *   1 件ごとに zod 検証し、不正アイテムは warn でスキップして継続する
+	 * 購入済み一覧を全ページ取得する
+	 * 1 件ごとに zod 検証し、不正アイテムは warn でスキップして継続する
 	 */
 	async fetchPurchasedKeys(): Promise<NoteRef[]> {
 		const collected: NoteRef[] = [];
@@ -216,8 +203,8 @@ function collectRefs(
 }
 
 /**
- * @description 購入済み 1 アイテムを zod でパースして NoteRef に正規化
- *   検証失敗時は undefined を返してスキップ判断は呼び出し側に委ねる
+ * 購入済み 1 アイテムを zod でパースして NoteRef に正規化する
+ * 検証失敗時は undefined を返してスキップ判断は呼び出し側に委ねる
  */
 function parseRef(item: unknown): NoteRef | undefined {
 	const parsed = PurchasedItemSchema.safeParse(item);
@@ -238,8 +225,8 @@ function parseRef(item: unknown): NoteRef | undefined {
 }
 
 /**
- * @description URL or note key 文字列から key を抽出する
- *   解釈不能な場合は undefined
+ * URL または note key 文字列から key を抽出する
+ * 解釈不能な場合は undefined
  */
 export function parseUrlOrKey(s: string): string | undefined {
 	const trimmed = s.trim();

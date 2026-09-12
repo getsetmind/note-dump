@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * @description note.com 購入済み API の 1 アイテム本体
+ * note.com 購入済み API の 1 アイテム本体
  */
 const PurchasedItemInnerSchema = z
 	.object({
@@ -18,8 +18,8 @@ const PurchasedItemInnerSchema = z
 	.loose();
 
 /**
- * @description 購入済みリストの 1 行
- *   `{ note: {...} }` ラッパー型と素の `{ key, ... }` 型を preprocess で吸収
+ * 購入済みリストの 1 行
+ * `{ note: {...} }` ラッパー型と素の `{ key, ... }` 型を preprocess で吸収する
  */
 export const PurchasedItemSchema = z.preprocess((raw) => {
 	if (
@@ -34,8 +34,8 @@ export const PurchasedItemSchema = z.preprocess((raw) => {
 }, PurchasedItemInnerSchema);
 
 /**
- * @description GET /api/v3/payments/purchase_notes のレスポンス
- *   data 配列以外のフィールドは将来追加されても無視する
+ * GET /api/v3/payments/purchase_notes のレスポンス
+ * data 配列以外のフィールドは将来追加されても無視する
  */
 export const PurchasedListResponseSchema = z
 	.object({
@@ -44,8 +44,8 @@ export const PurchasedListResponseSchema = z
 	.loose();
 
 /**
- * @description GET /api/v3/notes/:key のレスポンス
- *   未知フィールドは loose で raw に残す
+ * GET /api/v3/notes/:key のレスポンス
+ * 未知フィールドは loose で raw に残す
  */
 export const NoteDetailResponseSchema = z.object({
 	data: z
@@ -68,18 +68,18 @@ export const NoteDetailResponseSchema = z.object({
 });
 
 /**
- * @description Mode の許容値
+ * Mode の許容値
  */
 export const ModeSchema = z.enum(["auto", "file", "args"]);
 
 /**
- * @description Format の許容値
+ * Format の許容値
  */
 export const FormatSchema = z.enum(["md", "html", "both"]);
 
 /**
- * @description loadConfig が組み立てた生入力をバリデーションする
- *   coerce で文字列フラグを数値/真偽値に寄せる
+ * loadConfig が組み立てた生入力をバリデーションする
+ * coerce で文字列フラグを数値/真偽値に寄せる
  */
 export const ConfigSchema = z.object({
 	cookie: z.string().min(1, "NOTE_COOKIE が未設定"),
@@ -96,16 +96,11 @@ export const ConfigSchema = z.object({
 });
 
 /**
- * @description 検証済み Config
+ * 検証済みの設定
  */
 export type Config = z.infer<typeof ConfigSchema>;
 
 /**
- * @description Mode 型
- */
-export type Mode = z.infer<typeof ModeSchema>;
-
-/**
- * @description Format 型
+ * Format 型
  */
 export type Format = z.infer<typeof FormatSchema>;

@@ -14,6 +14,7 @@ bun run dump:file --urls=urls.txt  # URL リストから手動ダンプ
 bun run typecheck              # tsc --noEmit
 bun run lint                   # biome lint .
 bun run format                 # biome check --write --unsafe .
+bun run check:quality          # 統合品質検査 (biome/typecheck/knip/comment/document-style/tsdoc)
 ```
 
 CLI フラグ (`src/dump.ts` 経由): `--mode={auto|file|args}` `--out=` `--urls=` `--concurrency=` `--delay=` `--limit=` `--format={md|html|both}` `--youtube-dl` `--cdp-url=`。`args` モードは positional 引数 (URL or note key) を直接渡す形で、`--mode` 省略時に positional があれば自動選択される。

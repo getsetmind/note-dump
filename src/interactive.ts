@@ -5,12 +5,12 @@ import { runDump } from "./dump";
 import type { Format } from "./schemas";
 
 /**
- * @description トップメニューの選択肢
+ * トップメニューの選択肢
  */
 type MenuChoice = "auto" | "args" | "file" | "cookie" | "settings" | "exit";
 
 /**
- * @description ダンプ系メニューで共通に聞く出力オプション
+ * ダンプ系メニューで共通に聞く出力オプション
  */
 interface DumpOptions {
 	format: Format;
@@ -20,8 +20,8 @@ interface DumpOptions {
 }
 
 /**
- * @description Ctrl+C を検知したら outro 出して exit する
- *   asserts 経由で symbol を型レベルで除去するため、呼び出し側で as キャスト不要
+ * Ctrl+C を検知したら outro を表示して exit する
+ * asserts 経由で symbol を型レベルで除去するため、呼び出し側で as キャストは不要
  */
 function bailIfCancelled<T>(value: T | symbol): asserts value is T {
 	if (p.isCancel(value)) {
@@ -31,7 +31,7 @@ function bailIfCancelled<T>(value: T | symbol): asserts value is T {
 }
 
 /**
- * @description format/youtube-dl/concurrency/limit を順に聞く
+ * format/youtube-dl/concurrency/limit を順に聞く
  */
 async function askDumpOptions(): Promise<DumpOptions> {
 	const format = await p.select<Format>({
@@ -83,7 +83,7 @@ async function askDumpOptions(): Promise<DumpOptions> {
 }
 
 /**
- * @description DumpOptions を loadConfig が読む argv 形式に直す
+ * DumpOptions を loadConfig が読む argv 形式に変換する
  */
 function optionsToArgv(opts: DumpOptions): string[] {
 	const argv: string[] = [
@@ -96,8 +96,8 @@ function optionsToArgv(opts: DumpOptions): string[] {
 }
 
 /**
- * @description 入力テキストを区切って URL/key 配列にする
- *   note key 形式や note URL を緩く受け付け、解釈不能トークンは warn 表示してスキップ
+ * 入力テキストを区切って URL/key の配列にする
+ * note key 形式や note URL を緩く受け付け、解釈不能なトークンは warn 表示してスキップする
  */
 function splitInputs(text: string): string[] {
 	return text
@@ -107,8 +107,8 @@ function splitInputs(text: string): string[] {
 }
 
 /**
- * @description ダンプ系3フローの末尾共通処理 (オプション質問 → 確認 → 実行)
- *   modeArgv に各モード固有のフラグや positional 引数を渡す
+ * ダンプ系 3 フローの末尾共通処理 (オプション質問 → 確認 → 実行)
+ * modeArgv に各モード固有のフラグや positional 引数を渡す
  */
 async function confirmAndRun(
 	confirmMessage: string,
@@ -122,14 +122,14 @@ async function confirmAndRun(
 }
 
 /**
- * @description 購入済み API から全件取得してダンプ
+ * 購入済み API から全件取得してダンプする
  */
 async function flowAuto(): Promise<void> {
 	await confirmAndRun("購入済みを全件取得して dump する?", ["--mode=auto"]);
 }
 
 /**
- * @description 入力欄に貼り付けた URL/key を positional として dump.ts に流す
+ * 入力欄に貼り付けた URL/key を positional として dump.ts に流す
  */
 async function flowArgs(): Promise<void> {
 	const raw = await p.text({
@@ -148,7 +148,8 @@ async function flowArgs(): Promise<void> {
 }
 
 /**
- * @description ファイル存在チェックは dump.ts 側 (readUrlsFile) に任せる
+ * URL リストファイルを指定してダンプする
+ * ファイルの存在チェックは dump.ts 側 (readUrlsFile) に任せる
  */
 async function flowFile(): Promise<void> {
 	const path = await p.text({
@@ -163,8 +164,8 @@ async function flowFile(): Promise<void> {
 }
 
 /**
- * @description scripts/get-cookie-cdp.ts を子プロセスで実行 (stdio inherit)
- *   完了後 process.env.NOTE_COOKIE は更新されないため、利用には対話 CLI 再起動が必要
+ * scripts/get-cookie-cdp.ts を子プロセスで実行して Cookie を更新する (stdio inherit)
+ * 完了後 process.env.NOTE_COOKIE は更新されないため、利用には対話 CLI の再起動が必要
  */
 async function flowCookie(): Promise<void> {
 	const ok = await p.confirm({
@@ -190,7 +191,8 @@ async function flowCookie(): Promise<void> {
 }
 
 /**
- * @description Cookie 有効性は表示のみ (疎通確認はせず長さ + _note_session_v5 の有無で判定)
+ * 現在の設定を表示する
+ * Cookie の有効性は疎通確認せず、長さと _note_session_v5 の有無だけで判定する
  */
 function flowSettings(): void {
 	const cookie = process.env.NOTE_COOKIE ?? "";
@@ -213,7 +215,8 @@ function flowSettings(): void {
 }
 
 /**
- * @description トップメニュー1ターンぶん。"exit" を返したらループ終了
+ * トップメニュー 1 ターンぶんを処理する
+ * "exit" を返したらループを終了する
  */
 async function step(): Promise<MenuChoice> {
 	const choice = await p.select<MenuChoice>({
@@ -255,7 +258,7 @@ async function step(): Promise<MenuChoice> {
 }
 
 /**
- * @description 起動時に .env を一度だけ process.env に展開してメニューループへ入る
+ * 起動時に .env を一度だけ process.env に展開してメニューループへ入る
  */
 async function main(): Promise<void> {
 	loadDotenv(resolve(process.cwd(), ".env"));

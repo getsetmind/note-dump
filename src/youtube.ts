@@ -2,9 +2,7 @@ import { mkdir, readdir } from "node:fs/promises";
 import { parse as parseHTML } from "node-html-parser";
 
 /**
- * @description YouTube 動画 URL を本文 HTML から抽出
- * @param bodyHtml - note 記事の body HTML
- * @returns 重複除去済み URL 列
+ * 本文 HTML から YouTube 動画 URL を重複なく抽出する
  */
 export function extractYoutubeUrls(bodyHtml: string): string[] {
 	const root = parseHTML(bodyHtml);
@@ -28,7 +26,7 @@ export function extractYoutubeUrls(bodyHtml: string): string[] {
 }
 
 /**
- * @description YouTube ホスト判定
+ * YouTube のホストかどうかを判定する
  */
 function isYoutube(url: string): boolean {
 	try {
@@ -46,7 +44,7 @@ function isYoutube(url: string): boolean {
 }
 
 /**
- * @description URL から YouTube 動画 ID を抽出
+ * URL から YouTube 動画 ID を抽出する
  */
 export function extractYoutubeId(url: string): string | undefined {
 	try {
@@ -67,7 +65,7 @@ export function extractYoutubeId(url: string): string | undefined {
 }
 
 /**
- * @description /embed/<id> 形式を watch?v=<id> に正規化
+ * /embed/<id> 形式を watch?v=<id> に正規化する
  */
 function normalizeYoutube(url: string): string {
 	const id = extractYoutubeId(url);
@@ -76,13 +74,13 @@ function normalizeYoutube(url: string): string {
 }
 
 /**
- * @description ytDlpAvailable() の結果をプロセス内で再利用するキャッシュ
+ * ytDlpAvailable() の結果をプロセス内で再利用するキャッシュ
  */
 let ytDlpAvailableCache: boolean | undefined;
 
 /**
- * @description yt-dlp が PATH に居るかチェック (Bun.spawn で Windows .cmd shim も直接解決)
- *  記事ごとに呼ばれるためプロセス内で一度だけ判定して結果を再利用する
+ * yt-dlp が PATH にあるか確認する (Bun.spawn で Windows の .cmd shim も直接解決)
+ * 記事ごとに呼ばれるためプロセス内で一度だけ判定して結果を再利用する
  */
 async function ytDlpAvailable(): Promise<boolean> {
 	if (ytDlpAvailableCache !== undefined) return ytDlpAvailableCache;
@@ -100,7 +98,8 @@ async function ytDlpAvailable(): Promise<boolean> {
 }
 
 /**
- * @description yt-dlp を起動して 1 本 DL。shell を経由しないためパスにスペースが入っても安全
+ * yt-dlp を起動して 1 本ダウンロードする
+ * shell を経由しないためパスにスペースが入っても安全
  */
 async function runYtDlp(url: string, outDir: string): Promise<void> {
 	const p = Bun.spawn(
@@ -121,8 +120,8 @@ async function runYtDlp(url: string, outDir: string): Promise<void> {
 }
 
 /**
- * @description 抽出した YouTube URL を全て yt-dlp で DL。未インストール時は warn してスキップ
- * @returns 成功した URL 数
+ * 抽出した YouTube URL をすべて yt-dlp でダウンロードする
+ * 未インストール時は warn してスキップし、成功した本数を返す
  */
 export async function downloadYoutubeAll(
 	urls: string[],
@@ -149,9 +148,8 @@ export async function downloadYoutubeAll(
 }
 
 /**
- * @description videos/ 配下のファイルから video ID → ファイル名のマップを構築
- * @param videosDir - videos ディレクトリ絶対パス
- * @returns ID をキー, "<id>.<ext>" を値とする Map (DL 失敗時等で空のこともある)
+ * videos/ 配下のファイルから動画 ID をキー, ファイル名を値とするマップを構築する
+ * ディレクトリが無い場合やダウンロード失敗時は空になる
  */
 export async function buildLocalVideoMap(
 	videosDir: string,
@@ -172,11 +170,8 @@ export async function buildLocalVideoMap(
 }
 
 /**
- * @description HTML 内の YouTube iframe/figure 埋め込みをローカル <video> + 元動画リンクに置換
- * @param html - 入力 HTML
- * @param videosDirRel - <video src> に書く相対パス (例: "videos")
- * @param fileMap - buildLocalVideoMap の結果
- * @returns 置換後 HTML (置換が無くても元 HTML を返す)
+ * HTML 内の YouTube iframe/figure 埋め込みをローカルの <video> と元動画リンクに置換する
+ * 置換が無い場合は元の HTML をそのまま返す
  */
 export function rewriteYoutubeEmbedsToLocal(
 	html: string,

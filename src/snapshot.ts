@@ -1,11 +1,5 @@
 /**
- * @description CDP イベント or レスポンス
- * @property id - RPC 応答のリクエスト ID @optional
- * @property method - イベント名 (応答時は無し) @optional
- * @property sessionId - 紐づくセッション @optional
- * @property params - イベントパラメータ @optional
- * @property result - RPC 成功時の戻り値 @optional
- * @property error - RPC 失敗時のエラー情報 @optional
+ * CDP のイベントまたは RPC 応答
  */
 interface CdpMessage {
 	id?: number;
@@ -17,8 +11,8 @@ interface CdpMessage {
 }
 
 /**
- * @description CDP に複数 RPC を投げ、Page イベントを待てる軽量クライアント
- *   1 WebSocket をプールして送信 ID と pending を自前管理する
+ * CDP に複数 RPC を投げ、Page イベントを待てる軽量クライアント
+ * 1 WebSocket をプールして送信 ID と pending を自前管理する
  */
 class CdpSession {
 	private ws: WebSocket | null = null;
@@ -37,8 +31,7 @@ class CdpSession {
 	}> = [];
 
 	/**
-	 * @description ブラウザ単位の WS に接続
-	 * @param wsUrl - browser webSocketDebuggerUrl
+	 * ブラウザ単位の WebSocket に接続する
 	 */
 	async connect(wsUrl: string): Promise<void> {
 		await new Promise<void>((res, rej) => {
@@ -60,7 +53,7 @@ class CdpSession {
 	}
 
 	/**
-	 * @description 受信メッセージをディスパッチ
+	 * 受信メッセージをディスパッチする
 	 */
 	private dispatch(m: CdpMessage): void {
 		if (m.id !== undefined) {
@@ -109,10 +102,7 @@ class CdpSession {
 	}
 
 	/**
-	 * @description 1 件 RPC を送って結果を待つ
-	 * @param method - CDP メソッド名
-	 * @param params - パラメータ
-	 * @param sessionId - 対象セッション @optional
+	 * 1 件 RPC を送って結果を待つ
 	 */
 	send(
 		method: string,
@@ -131,10 +121,7 @@ class CdpSession {
 	}
 
 	/**
-	 * @description 指定イベントを 1 回だけ待つ
-	 * @param method - 待つイベント名 (例: 'Page.loadEventFired')
-	 * @param sessionId - 対象セッション @optional
-	 * @param timeoutMs - タイムアウト @defaultValue 30000
+	 * 指定イベントを 1 回だけ待つ
 	 */
 	waitFor(
 		method: string,
@@ -161,7 +148,7 @@ class CdpSession {
 	}
 
 	/**
-	 * @description WebSocket を閉じてセッションを破棄
+	 * WebSocket を閉じてセッションを破棄する
 	 */
 	close(): void {
 		this.ws?.close();
@@ -170,7 +157,7 @@ class CdpSession {
 }
 
 /**
- * @description /json/version からブラウザレベル WS URL を取得
+ * /json/version からブラウザレベルの WebSocket URL を取得する
  */
 async function getBrowserWsUrl(cdpUrl: string): Promise<string> {
 	const res = await fetch(`${cdpUrl}/json/version`);
@@ -187,10 +174,7 @@ async function getBrowserWsUrl(cdpUrl: string): Promise<string> {
 }
 
 /**
- * @description CDP で URL を開き、ログイン UI 除去 + lazy-load 発火後に outerHTML を返す
- * @param cdpUrl - CDP HTTP ベース URL (例: http://localhost:9222)
- * @param targetUrl - 開く note 記事 URL
- * @returns 文字列としての完全な HTML
+ * CDP で URL を開き、ログイン UI 除去と lazy-load 発火を経た outerHTML を返す
  */
 export async function captureRenderedHtml(
 	cdpUrl: string,

@@ -4,16 +4,17 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"lint": "biome lint .",
+		"format": "biome check --write --unsafe .",
+		"check:quality": "quality-check",
 		"dump": "bun run src/dump.ts",
 		"dump:auto": "bun run src/dump.ts --mode=auto",
 		"dump:file": "bun run src/dump.ts --mode=file",
 		"dump:html": "bun run src/dump.ts --format=html",
 		"dump:both": "bun run src/dump.ts --format=both",
 		"menu": "bun run src/interactive.ts",
-		"cookie:cdp": "bun run scripts/get-cookie-cdp.ts",
-		"typecheck": "tsc --noEmit",
-		"lint": "biome lint .",
-		"format": "biome check --write --unsafe ."
+		"cookie:cdp": "bun run scripts/get-cookie-cdp.ts"
 	},
 	"dependencies": {
 		"@clack/prompts": "^1.8.0",
@@ -26,7 +27,13 @@
 		"@types/bun": "^1.4.2",
 		"@types/turndown": "^5.0.6",
 		"@yuu1111/biome-config": "^2.0.0",
+		"@yuu1111/comment-check": "^1.0.1",
+		"@yuu1111/document-style-check": "^0.1.1",
+		"@yuu1111/knip-config": "^1.0.5",
+		"@yuu1111/quality-check": "^0.5.1",
 		"@yuu1111/tsconfig": "^1.0.5",
+		"@yuu1111/tsdoc-check": "^1.1.0",
+		"knip": "^6.35.1",
 		"typescript": "^7.0.2"
 	}
 }
