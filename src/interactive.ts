@@ -25,22 +25,21 @@ interface MenuItem {
 
 /**
  * Ctrl+C を検知したら outro を表示して exit する
- * asserts 経由で symbol を型レベルで除去するため、呼び出し側で as キャストは不要
+ * symbol を型レベルで除去するため、呼び出し側で as キャストは不要
  */
-function bailIfCancelled<T>(value: T | symbol): asserts value is T {
+function unwrapCancelled<T>(value: T | typeof p.CANCEL_SYMBOL): T {
 	if (p.isCancel(value)) {
 		p.cancel("中断しました");
 		process.exit(0);
 	}
+	return value;
 }
 
 /**
  * プロンプトの結果を待ち、キャンセルされていれば終了する
  */
-async function ask<T>(prompt: Promise<T | symbol>): Promise<T> {
-	const value = await prompt;
-	bailIfCancelled(value);
-	return value;
+function ask<T>(prompt: Promise<T | typeof p.CANCEL_SYMBOL>): Promise<T> {
+	return prompt.then(unwrapCancelled);
 }
 
 /**

@@ -7,8 +7,9 @@ import {
 	type NoteRef,
 	parseUrlOrKey,
 } from "./api";
-import { type Config, loadConfig } from "./config";
+import { loadConfig } from "./config";
 import { downloadImagesAndRewrite, htmlToMarkdown } from "./markdown";
+import type { Config } from "./schemas";
 import { captureRenderedHtml } from "./snapshot";
 import {
 	buildLocalVideoMap,

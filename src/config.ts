@@ -3,8 +3,6 @@ import { resolve } from "node:path";
 import type { z } from "zod";
 import { type Config, ConfigSchema } from "./schemas";
 
-export type { Config };
-
 /**
  * .env の 1 行から取り出した key と値
  */
