@@ -246,6 +246,9 @@ async function getBrowserWsUrl(cdpUrl: string): Promise<string> {
 
 /**
  * CDP で URL を開き、ログイン UI 除去と lazy-load 発火を経た outerHTML を返す
+ *
+ * @param cdpUrl - CDP のエンドポイント URL
+ * @param targetUrl - 開く記事の URL
  */
 export async function captureRenderedHtml(
 	cdpUrl: string,

@@ -251,7 +251,7 @@ function readUrlsFile(path: string): NoteRef[] {
 		text = readFileSync(path, "utf8");
 	} catch (e) {
 		if (errnoCode(e) === "ENOENT") {
-			throw new Error(`urls ファイルが見つからない: ${path}`);
+			throw new Error(`urls ファイルが見つからない: ${path}`, { cause: e });
 		}
 		throw e;
 	}
@@ -342,6 +342,8 @@ async function dumpAll(
 /**
  * CLI エントリポイント
  * 設定読み込み、対象列挙、並行ダンプの順に実行する
+ *
+ * @param argv - CLI 引数 (process.argv.slice(2) 相当)
  */
 export async function runDump(argv: string[]): Promise<void> {
 	const cfg = loadConfig(argv);

@@ -41,6 +41,8 @@ function pathSegment(pathname: string, prefix: string): string | undefined {
 
 /**
  * URL から YouTube 動画 ID を抽出する
+ *
+ * @param url - 抽出元の URL
  */
 export function extractYoutubeId(url: string): string | undefined {
 	const u = parseUrl(url);
@@ -110,6 +112,8 @@ function collectYoutubeUrls(
 
 /**
  * 本文 HTML から YouTube 動画 URL を重複なく抽出する
+ *
+ * @param bodyHtml - 本文 HTML
  */
 export function extractYoutubeUrls(bodyHtml: string): string[] {
 	const root = parseHTML(bodyHtml);
@@ -172,6 +176,9 @@ async function runYtDlp(url: string, outDir: string): Promise<void> {
 /**
  * 抽出した YouTube URL をすべて yt-dlp でダウンロードする
  * 未インストール時は warn してスキップし、成功した本数を返す
+ *
+ * @param urls - ダウンロード対象の URL
+ * @param outDir - 動画の保存先ディレクトリ
  */
 export async function downloadYoutubeAll(
 	urls: string[],
@@ -201,6 +208,8 @@ export async function downloadYoutubeAll(
 /**
  * videos/ 配下のファイルから動画 ID をキー, ファイル名を値とするマップを構築する
  * ディレクトリが無い場合やダウンロード失敗時は空になる
+ *
+ * @param videosDir - videos/ のパス
  */
 export async function buildLocalVideoMap(
 	videosDir: string,
@@ -235,6 +244,10 @@ function localEmbedHtml(
 /**
  * HTML 内の YouTube iframe/figure 埋め込みをローカルの <video> と元動画リンクに置換する
  * 置換が無い場合は元の HTML をそのまま返す
+ *
+ * @param html - 置換対象の HTML
+ * @param videosDirRel - 動画ディレクトリへの相対パス
+ * @param fileMap - 動画 ID からファイル名へのマップ
  */
 export function rewriteYoutubeEmbedsToLocal(
 	html: string,

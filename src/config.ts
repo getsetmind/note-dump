@@ -69,6 +69,8 @@ function unquote(value: string): string {
 /**
  * .env を行単位でパースして process.env に流し込む
  * 既に環境変数として存在するキーは上書きしない
+ *
+ * @param path - 読み込む .env のパス
  */
 export function loadDotenv(path: string): void {
 	if (!existsSync(path)) return;
@@ -153,6 +155,8 @@ function formatZodError(err: z.ZodError): string {
 /**
  * CLI 引数と環境変数から Config を組み立てて zod で検証する
  * フラグ、環境変数、既定値の順に優先する
+ *
+ * @param argv - CLI 引数 (process.argv.slice(2) 相当)
  */
 export function loadConfig(argv: string[]): Config {
 	loadDotenv(resolve(process.cwd(), ".env"));

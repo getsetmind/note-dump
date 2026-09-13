@@ -24,7 +24,7 @@ Chrome を `--remote-debugging-port=9222` 付きで起動済みで note.com に�
 bun run cookie:cdp
 ```
 
-`_note_session_v5` (httpOnly) も含めて全 Cookie を取得し、`.env` の `NOTE_COOKIE` を自動で書き換える。
+`_note_session_v5` (httpOnly) も含めて全 Cookie を取得し、`.env` の `NOTE_COOKIE` を自動で書き換える
 
 #### B. 手動コピー (フォールバック)
 
@@ -48,12 +48,12 @@ bun run dump:auto
 bun run dump:auto -- --format=both
 ```
 
-複数の非公式エンドポイントを順に試し、ダメならライブラリページの HTML を解析する。
-取得した一覧は `out/_index.json` に保存される。
+複数の非公式エンドポイントを順に試し、ダメならライブラリページの HTML を解析する
+取得した一覧は `out/_index.json` に保存される
 
 ### args モード (URL を直接渡す)
 
-URL/key を引数として直接渡すと、その記事のみダンプする。`--mode` 省略時、位置引数があれば自動で `args` モードになる。
+URL/key を引数として直接渡すと、その記事のみダンプする `--mode` 省略時、位置引数があれば自動で `args` モードになる
 
 ```bash
 bun run dump https://note.com/<creator>/n/<noteKey>
@@ -84,7 +84,7 @@ bun run dump:file --urls=urls.txt
 | `--concurrency` | `2`         | 同時並行数                      |
 | `--delay`       | `600`       | リクエスト間隔 (ms)             |
 | `--limit`       | (なし)      | 先頭 N 件のみ処理 (動作確認用)   |
-| `--format`      | `md`        | `md` / `html` / `both`。`html`/`both` は CDP で実ブラウザから `page.html` を取得 |
+| `--format`      | `md`        | `md` / `html` / `both` `html`/`both` は CDP で実ブラウザから `page.html` を取得 |
 | `--youtube-dl`  | off         | 本文の YouTube 埋め込みを `yt-dlp` で `videos/` に保存 (要 PATH) |
 | `--cdp-url`     | `http://localhost:9222` | CDP エンドポイント (`--format=html`/`both` 時に使用) |
 
@@ -95,11 +95,11 @@ bun run dump:html      # HTML スナップショットのみ
 bun run dump:both      # Markdown + HTML 両方
 ```
 
-`--format=html` / `both` は CDP 経由で実ブラウザに記事を開かせ、ヘッダ等のログイン UI を除去・lazy-load 発火後に DOM をダンプする。`bun run cookie:cdp` と同じく `localhost:9222` の CDP が必要。`<img>` はローカル DL して相対参照に書き換えるが、CSS は note.com を絶対参照で残すためオフラインだとレイアウトが崩れる。
+`--format=html` / `both` は CDP 経由で実ブラウザに記事を開かせ、ヘッダ等のログイン UI を除去・lazy-load 発火後に DOM をダンプする `bun run cookie:cdp` と同じく `localhost:9222` の CDP が必要 `<img>` はローカル DL して相対参照に書き換えるが、CSS は note.com を絶対参照で残すためオフラインだとレイアウトが崩れる
 
 ## 出力構造
 
-```
+```text
 out/
 ├─ _index.json                       # auto モード時の取得一覧
 └─ <noteKey>_<title>/

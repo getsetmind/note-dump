@@ -268,6 +268,8 @@ function parseRef(item: unknown): NoteRef | undefined {
 /**
  * URL または note key 文字列から key を抽出する
  * 解釈不能な場合は undefined
+ *
+ * @param s - URL または note key 文字列
  */
 export function parseUrlOrKey(s: string): string | undefined {
 	const trimmed = s.trim();

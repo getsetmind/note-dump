@@ -90,6 +90,11 @@ async function resolveImageFilename(
 /**
  * 本文 HTML 内の画像を DL してローカル参照に書き換える
  * cache を渡すと同一記事内の再取得を省ける
+ *
+ * @param bodyHtml - 本文 HTML
+ * @param imageDir - 画像の保存先ディレクトリ
+ * @param client - 画像取得に使う NoteClient
+ * @param cache - URL からファイル名へのキャッシュ (省略時は再取得を省かない)
  */
 export async function downloadImagesAndRewrite(
 	bodyHtml: string,
@@ -132,6 +137,8 @@ export async function downloadImagesAndRewrite(
 /**
  * Turndown で HTML を Markdown 化する
  * iframe/embed は `[embed](url)`、figure は前後改行で囲むカスタムルールを追加する
+ *
+ * @param html - Markdown 化する HTML
  */
 export function htmlToMarkdown(html: string): string {
 	const td = new TurndownService({
