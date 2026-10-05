@@ -54,7 +54,8 @@ function pickImageSource(img: HTMLElement): string | undefined {
 function imageUrl(img: HTMLElement): string | undefined {
 	const src = pickImageSource(img);
 	if (!src || src.startsWith("data:")) return undefined;
-	return src.startsWith("http") ? src : `https:${src}`;
+	const url = new URL(src, "https://note.com/");
+	return /^https?:$/.test(url.protocol) ? url.href : undefined;
 }
 
 /**
@@ -64,6 +65,13 @@ function applyLocalSrc(img: HTMLElement, filename: string): void {
 	img.setAttribute("src", `images/${filename}`);
 	img.removeAttribute("data-src");
 	img.removeAttribute("srcset");
+	img.removeAttribute("srcSet");
+	img.removeAttribute("data-original-src");
+	img.removeAttribute("data-srcset");
+	img.removeAttribute("loading");
+	for (const source of img.parentNode?.querySelectorAll("source") ?? []) {
+		if (img.parentNode?.tagName === "PICTURE") source.remove();
+	}
 }
 
 /**

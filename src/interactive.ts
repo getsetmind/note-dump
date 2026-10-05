@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { loadDotenv } from "./config";
+import { saveCookie } from "./cookie";
 import { runDump } from "./dump";
 import type { Format } from "./schemas";
 
@@ -60,7 +61,7 @@ async function askDumpOptions(): Promise<DumpOptions> {
 			message: "出力フォーマット",
 			options: [
 				{ value: "md", label: "Markdown のみ", hint: "既定" },
-				{ value: "html", label: "HTML のみ (CDP 必要)" },
+				{ value: "html", label: "HTML のみ (元ページの CSS も保存)" },
 				{ value: "both", label: "両方" },
 			],
 			initialValue: "md",
@@ -189,10 +190,33 @@ async function flowFile(): Promise<void> {
 }
 
 /**
- * scripts/get-cookie-cdp.ts を子プロセスで実行して Cookie を更新する (stdio inherit)
- * 完了後 process.env.NOTE_COOKIE は更新されないため、利用には対話 CLI の再起動が必要
+ * Cookie の貼り付けまたは CDP 自動取得を選んで設定を更新する
  */
 async function flowCookie(): Promise<void> {
+	const method = await ask(
+		p.select({
+			message: "Cookie の登録方法",
+			options: [
+				{
+					value: "paste",
+					label: "Cookie ヘッダを貼り付け",
+					hint: "ブラウザの通常起動で OK",
+				},
+				{ value: "cdp", label: "CDP で自動取得" },
+			],
+		}),
+	);
+	if (method === "paste") {
+		p.log.info(
+			"note.com にログインし、F12 → Network → ページを再読み込み → note.com のリクエスト → Request Headers の Cookie の値をコピーしてください。",
+		);
+		const cookie = await ask(
+			p.password({ message: "Cookie ヘッダを貼り付け" }),
+		);
+		saveCookie(cookie, resolve(process.cwd(), ".env"));
+		p.log.success("Cookie を保存しました。このままダンプできます。");
+		return;
+	}
 	const ok = await ask(
 		p.confirm({
 			message:
@@ -210,7 +234,9 @@ async function flowCookie(): Promise<void> {
 	});
 	const code = await proc.exited;
 	if (code === 0) {
-		s.stop("完了 (再起動すると新しい Cookie が読まれます)");
+		delete process.env.NOTE_COOKIE;
+		loadDotenv(resolve(process.cwd(), ".env"));
+		s.stop("Cookie を更新しました。このままダンプできます。");
 	} else {
 		s.stop(`失敗 (exit ${code})`);
 	}
@@ -227,6 +253,7 @@ function flowSettings(): void {
 		`NOTE_COOKIE:    ${cookie ? `${cookie.length} 文字` : "未設定"}`,
 		`_note_session:  ${hasSession ? "あり" : "なし"}`,
 		`OUT_DIR:        ${process.env.OUT_DIR ?? "(既定: ./out)"}`,
+		`HTML_SOURCE:    ${process.env.HTML_SOURCE ?? "(既定: http / CDP 不要)"}`,
 		`CDP_URL:        ${process.env.CDP_URL ?? "(既定: http://localhost:9222)"}`,
 		`CONCURRENCY:    ${process.env.CONCURRENCY ?? "(既定: 2)"}`,
 	];
@@ -255,7 +282,7 @@ const MENU = [
 	{ value: "auto", label: "全件ダンプ (購入済みを自動取得)", run: flowAuto },
 	{ value: "args", label: "URL / note key を指定してダンプ", run: flowArgs },
 	{ value: "file", label: "urls.txt から読み込みダンプ", run: flowFile },
-	{ value: "cookie", label: "Cookie を更新 (CDP 経由)", run: flowCookie },
+	{ value: "cookie", label: "Cookie を登録・更新", run: flowCookie },
 	{ value: "settings", label: "設定を確認", run: flowSettings },
 	{ value: "exit", label: "終了", run: noop },
 ] as const satisfies readonly MenuItem[];

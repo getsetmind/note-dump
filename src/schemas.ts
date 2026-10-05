@@ -98,6 +98,7 @@ export const ConfigSchema = z.object({
 	limit: z.coerce.number().int().positive().optional(),
 	positional: z.array(z.string()),
 	format: FormatSchema,
+	htmlSource: z.enum(["http", "cdp"]),
 	youtubeDl: z.coerce.boolean(),
 	cdpUrl: z.url(),
 });

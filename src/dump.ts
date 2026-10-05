@@ -8,6 +8,7 @@ import {
 	parseUrlOrKey,
 } from "./api";
 import { loadConfig } from "./config";
+import { captureHttpHtml } from "./http-snapshot";
 import { downloadImagesAndRewrite, htmlToMarkdown } from "./markdown";
 import type { Config } from "./schemas";
 import { captureRenderedHtml } from "./snapshot";
@@ -101,7 +102,7 @@ async function downloadVideos(
 }
 
 /**
- * CDP で描画した記事 HTML を page.html として保存する
+ * HTTP または CDP で取得した記事 HTML を page.html として保存する
  * 取得に失敗した場合は ok=false を返して warn のみで継続する
  */
 async function writeRenderedHtml(
@@ -117,7 +118,10 @@ async function writeRenderedHtml(
 		? `https://note.com/${detail.user.urlname}/n/${detail.key}`
 		: ref.url;
 	try {
-		const captured = await captureRenderedHtml(cfg.cdpUrl, articleUrl);
+		const captured =
+			cfg.htmlSource === "cdp"
+				? await captureRenderedHtml(cfg.cdpUrl, articleUrl)
+				: await captureHttpHtml(client, articleUrl, detail, dir);
 		const { html, count } = await downloadImagesAndRewrite(
 			captured,
 			join(dir, "images"),

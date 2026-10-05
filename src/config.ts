@@ -180,6 +180,7 @@ export function loadConfig(argv: string[]): Config {
 		limit: flags.limit,
 		positional,
 		format: pickSetting(flags, ["format"], "FORMAT", DEFAULTS.format),
+		htmlSource: pickSetting(flags, ["html-source"], "HTML_SOURCE", "http"),
 		youtubeDl: resolveYoutubeDl(flags),
 		cdpUrl: pickSetting(flags, ["cdp-url"], "CDP_URL", DEFAULTS.cdpUrl),
 	};
