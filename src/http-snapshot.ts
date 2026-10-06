@@ -39,7 +39,7 @@ class StyleArchive {
 	) {}
 
 	/**
-	 * CSS の url() と引用符付き @import を保存済み参照に書き換える
+	 * CSS の url() と引用符付き `@import` を保存済み参照に書き換える
 	 */
 	async rewrite(css: string, base: string, prefix: string): Promise<string> {
 		const pattern =

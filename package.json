@@ -21,17 +21,17 @@
 		"@clack/prompts": "^1.8.1",
 		"node-html-parser": "^9.0.4",
 		"turndown": "^7.2.4",
-		"zod": "^4.6.4"
+		"zod": "^4.6.5"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.13",
+		"@biomejs/biome": "^2.5.15",
 		"@types/bun": "^1.4.2",
 		"@types/turndown": "^5.0.6",
-		"@yuu1111/biome-config": "^2.2.0",
-		"@yuu1111/knip-config": "^1.0.7",
-		"@yuu1111/quality-check": "^4.0.0",
-		"@yuu1111/tsconfig": "^1.0.7",
-		"knip": "^6.35.1",
+		"@yuu1111/biome-config": "^2.2.2",
+		"@yuu1111/knip-config": "^2.1.0",
+		"@yuu1111/quality-check": "^5.3.1",
+		"@yuu1111/tsconfig": "^1.0.8",
+		"knip": "^6.39.0",
 		"typescript": "^7.0.2"
 	}
 }

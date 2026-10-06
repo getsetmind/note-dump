@@ -3,10 +3,10 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "node-html-parser";
-import { NoteClient, type NoteDetail } from "./api";
-import { saveCookie } from "./cookie";
-import { captureHttpHtml } from "./http-snapshot";
-import { downloadImagesAndRewrite } from "./markdown";
+import { NoteClient, type NoteDetail } from "../src/api";
+import { saveCookie } from "../src/cookie";
+import { captureHttpHtml } from "../src/http-snapshot";
+import { downloadImagesAndRewrite } from "../src/markdown";
 
 /**
  * ネットワークに依存せず、SSR・CSS・アセットを返す検証用サーバー
