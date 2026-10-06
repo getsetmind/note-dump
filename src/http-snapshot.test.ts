@@ -15,6 +15,20 @@ const server = Bun.serve({
 	port: 0,
 	fetch(request) {
 		const path = new URL(request.url).pathname;
+		if (path === "/controls")
+			return new Response(`<html><body><div id="note-body"></div>
+			<button id="share"><svg></svg></button><div id="empty-bar" class="fixed border-t"><button>スキ</button></div>
+			<div id="fixed-link" class="fixed"><a href="/author">著者</a></div></body></html>`);
+		if (path === "/decorated")
+			return new Response(`<!DOCTYPE html><html><body><div id="note-body">
+			<figure id="photo" class="ssr-frame"><a href="/photo.png?zoom"><img src="/photo.png?width=1200"></a><figcaption>説明</figcaption></figure>
+			<nav aria-label="目次" class="original-toc"><details open><summary>目次</summary><ol><li class="original-item"><a href="#first">最初</a></li></ol><div><button>すべて表示</button></div></details></nav>
+			<h2 id="first" class="original-heading">最初</h2><p id="preview">短い無料部分</p>
+			</div><div data-testid="note-body-gradient-overlay" aria-hidden="true" style="background:linear-gradient(to top, white, transparent)"></div><div id="stream"><!--$?--><template id="B:0"></template><div>読み込み中<!--$?-->内側<!--/$--></div><!--/$--><p id="after">境界外</p></div>
+			<div hidden id="S:0"><p id="resolved">後送された内容</p><!--$?--><template id="B:1"></template><p>入れ子の仮表示</p><!--/$--></div>
+			<div hidden id="S:1"><span id="nested-resolved">入れ子の確定内容</span></div>
+			<div id="empty-skeleton" class="bg-surface-quaternary">&nbsp;</div><aside><div class="animate-pulse"></div></aside>
+			<script>throw new Error("実行禁止")</script></body></html>`);
 		if (path === "/article")
 			return new Response(`<!DOCTYPE html><html><head>
 			<link rel="stylesheet" href="/main.css" integrity="old"><link rel="preload" href="/app.js">
@@ -140,6 +154,78 @@ test("旧ページの本文セレクタも使える", async () => {
 		dir,
 	);
 	expect(html).toContain("購入済みの全文");
+});
+
+test("SSR の装飾・目次・後送 HTML を保持し、無料プレビューで購入本文を上書きしない", async () => {
+	const body =
+		'<figure id="photo"><img src="/photo.png"><figcaption>説明</figcaption></figure><table-of-contents></table-of-contents><h2 id="first">最初</h2><p id="preview">購入本文の続きも全部保存する</p><h3 id="paid-heading">有料部分の見出し</h3>';
+	const html = await captureHttpHtml(
+		new NoteClient("test", 0),
+		new URL("/decorated", server.url).href,
+		{ ...detail, body },
+		dir,
+	);
+	const root = parse(html);
+	expect(root.querySelector("#photo")?.getAttribute("class")).toBe("ssr-frame");
+	expect(root.querySelector("#photo a img")).not.toBeNull();
+	expect(root.querySelector("#first")?.getAttribute("class")).toBe(
+		"original-heading",
+	);
+	expect(root.querySelector("#preview")?.text).toBe(
+		"購入本文の続きも全部保存する",
+	);
+	expect(
+		root.querySelector('nav[aria-label="目次"]')?.getAttribute("class"),
+	).toBe("original-toc");
+	expect(root.querySelectorAll('nav[aria-label="目次"] li')).toHaveLength(2);
+	expect(root.querySelector('a[href="#paid-heading"]')).not.toBeNull();
+	expect(
+		root.querySelector(
+			"table-of-contents, button, script, template, [hidden][id]",
+		),
+	).toBeNull();
+	expect(root.querySelector("#stream #resolved")?.text).toBe("後送された内容");
+	expect(root.querySelector("#after")?.text).toBe("境界外");
+	expect(root.querySelector("#stream #nested-resolved")?.text).toBe(
+		"入れ子の確定内容",
+	);
+	expect(root.querySelector("#empty-skeleton, .animate-pulse")).toBeNull();
+	expect(
+		root.querySelector('[data-testid="note-body-gradient-overlay"]'),
+	).toBeNull();
+	expect(html).not.toContain("読み込み中");
+	expect(html).not.toContain("入れ子の仮表示");
+});
+
+test("画像が差し替わった場合は同じ ID の古い SSR 画像を引き継がない", async () => {
+	const body =
+		'<figure id="photo"><img src="/new.png"><figcaption>説明</figcaption></figure>';
+	const html = await captureHttpHtml(
+		new NoteClient("test", 0),
+		new URL("/decorated", server.url).href,
+		{ ...detail, body },
+		dir,
+	);
+	expect(parse(html).querySelector("#photo img")?.getAttribute("src")).toBe(
+		new URL("/new.png", server.url).href,
+	);
+});
+
+test("本文外の動かないボタンと空の固定バーだけを除去する", async () => {
+	const html = await captureHttpHtml(
+		new NoteClient("test", 0),
+		new URL("/controls", server.url).href,
+		{
+			...detail,
+			body: '<p>購入本文</p><button id="body-button">埋め込みのボタン</button><div id="body-fixed" class="fixed"></div>',
+		},
+		dir,
+	);
+	const root = parse(html);
+	expect(root.querySelector("#share, #empty-bar")).toBeNull();
+	expect(root.querySelector("#fixed-link a")?.text).toBe("著者");
+	expect(root.querySelector("#body-button")?.text).toBe("埋め込みのボタン");
+	expect(root.querySelector("#body-fixed")).not.toBeNull();
 });
 
 test("未知のページ構造と空本文を成功として保存しない", async () => {

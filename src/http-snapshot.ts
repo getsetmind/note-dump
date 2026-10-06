@@ -100,7 +100,148 @@ class StyleArchive {
 }
 
 /**
- * API 本文へ差し替えつつ、SSR で展開済みの埋め込みを引き継ぐ
+ * 本文の一致を確認して SSR の画像・段落の表示用 HTML を引き継ぐ
+ */
+function preserveRenderedBlocks(
+	container: HTMLElement,
+	replacement: HTMLElement,
+): void {
+	const blocks = new Map(
+		container.querySelectorAll("[id]").map((element) => [element.id, element]),
+	);
+	for (const element of replacement.querySelectorAll("[id]")) {
+		const existing = blocks.get(element.id);
+		if (existing && equivalentBlock(element, existing))
+			element.replaceWith(existing.outerHTML);
+	}
+}
+
+/**
+ * プレビューや古い本文を引き継がないよう、文字列と画像の実体を照合する
+ */
+function equivalentBlock(
+	original: HTMLElement,
+	rendered: HTMLElement,
+): boolean {
+	if (
+		original.tagName !== rendered.tagName ||
+		original.text.replace(/\s/g, "") !== rendered.text.replace(/\s/g, "")
+	)
+		return false;
+	const imageKeys = (element: HTMLElement): string =>
+		element
+			.querySelectorAll("img")
+			.map((img) => {
+				const src =
+					img.getAttribute("data-src") ?? img.getAttribute("src") ?? "";
+				const url = resourceUrl(src, "https://note.com/");
+				return url ? new URL(url).origin + new URL(url).pathname : src;
+			})
+			.join("\n");
+	return imageKeys(original) === imageKeys(rendered);
+}
+
+/**
+ * 元ページの目次のスタイルに、購入済み本文の全見出しを組み込む
+ */
+function restoreContents(
+	replacement: HTMLElement,
+	container: HTMLElement,
+): void {
+	const headings = replacement.querySelectorAll("h2, h3");
+	const template = container.querySelector('nav[aria-label="目次"]');
+	for (const placeholder of replacement.querySelectorAll("table-of-contents")) {
+		const nav = parse(
+			template?.outerHTML ??
+				'<nav aria-label="目次" class="mt-9"><details open class="group bg-background-secondary p-4"><summary>目次</summary><ol></ol></details></nav>',
+		).querySelector("nav");
+		const list = nav?.querySelector("ol");
+		if (!nav || !list) continue;
+		const itemClass =
+			list
+				.querySelector("li")
+				?.getAttribute("class")
+				?.replace(/\bml-4\b/g, "") ?? "py-2 text-sm";
+		list.set_content("");
+		fillContents(list, headings, itemClass);
+		for (const button of nav.querySelectorAll("button"))
+			button.parentNode?.remove();
+		placeholder.replaceWith(nav);
+	}
+}
+
+/**
+ * 全見出しへのローカルアンカーを目次に追加する
+ */
+function fillContents(
+	list: HTMLElement,
+	headings: HTMLElement[],
+	itemClass: string,
+): void {
+	for (const [index, heading] of headings.entries()) {
+		const id = heading.id || `note-dump-heading-${index}`;
+		heading.setAttribute("id", id);
+		const item = parse('<li><a class="!no-underline"></a></li>').querySelector(
+			"li",
+		);
+		const link = item?.querySelector("a");
+		if (!item || !link) continue;
+		item.setAttribute(
+			"class",
+			`${itemClass}${heading.tagName === "H3" ? " ml-4" : ""}`,
+		);
+		link.setAttribute("href", `#${id}`);
+		link.textContent = heading.text;
+		list.appendChild(item);
+	}
+}
+
+/**
+ * React のストリーミング SSR で後送された HTML を対応する境界へ移す
+ * スクリプトは実行せず、明示された template と hidden セグメントを対応させる
+ */
+function restoreStreamedContent(root: HTMLElement): void {
+	const templates = new Map(
+		root
+			.querySelectorAll("template[id]")
+			.map((element) => [element.id, element]),
+	);
+	for (const segment of root.querySelectorAll("[hidden][id]")) {
+		if (!segment.id.startsWith("S:")) continue;
+		const template = templates.get(`B:${segment.id.slice(2)}`);
+		if (!template) continue;
+		removeBoundaryFallback(template);
+		template.replaceWith(...segment.childNodes);
+		segment.remove();
+	}
+}
+
+/**
+ * ストリーミング境界の fallback だけを、入れ子の終端を数えて取り除く
+ */
+function removeBoundaryFallback(template: HTMLElement): void {
+	const siblings = template.parentNode?.childNodes ?? [];
+	const index = siblings.indexOf(template);
+	if (siblings[index - 1]?.rawText !== "$?") return;
+	let depth = 0;
+	const fallback = [];
+	for (const node of siblings.slice(index + 1)) {
+		if (node.nodeType === 8 && node.rawText === "/$") {
+			if (depth === 0) {
+				fallback.forEach((item) => {
+					item.remove();
+				});
+				return;
+			}
+			depth--;
+		} else if (node.nodeType === 8 && /^\$(?:[?!])?$/.test(node.rawText))
+			depth++;
+		fallback.push(node);
+	}
+}
+
+/**
+ * API 本文を正とし、画像・目次・展開済み埋め込みの SSR 装飾を引き継ぐ
  */
 function replaceBody(container: HTMLElement, body: string): void {
 	const rendered = new Map<string, string>();
@@ -111,6 +252,8 @@ function replaceBody(container: HTMLElement, body: string): void {
 		if (key) rendered.set(key, figure.innerHTML);
 	}
 	const replacement = parse(body);
+	preserveRenderedBlocks(container, replacement);
+	restoreContents(replacement, container);
 	for (const figure of replacement.querySelectorAll(
 		"figure[embedded-content-key]",
 	)) {
@@ -166,7 +309,7 @@ function restoreEmptyEmbeds(root: HTMLElement, articleUrl: string): void {
  */
 function cleanPage(root: HTMLElement): void {
 	for (const node of root.querySelectorAll(
-		"script, noscript, header, base, #note-paywall, .note-paywall",
+		'script, noscript, header, base, #note-paywall, .note-paywall, [data-testid="note-body-gradient-overlay"]',
 	))
 		node.remove();
 	for (const node of root.querySelectorAll("meta[http-equiv], link")) {
@@ -177,6 +320,51 @@ function cleanPage(root: HTMLElement): void {
 			)
 		)
 			node.remove();
+	}
+	cleanLoadingUi(root);
+	cleanInactiveControls(root);
+}
+
+/**
+ * スクリプト依存の本文外ボタンと、空になった固定バーを取り除く
+ */
+function cleanInactiveControls(root: HTMLElement): void {
+	for (const button of root.querySelectorAll("button")) {
+		if (!button.closest(BODY_SELECTORS.join(", "))) button.remove();
+	}
+	for (const node of root.querySelectorAll(".fixed")) {
+		if (
+			node.closest(BODY_SELECTORS.join(", ")) ||
+			node.text.trim() ||
+			node.querySelector("a, img, svg, input, iframe, video")
+		)
+			continue;
+		node.remove();
+	}
+}
+
+/**
+ * JavaScript がないと残り続ける本文外の空スケルトンと読み込み表示を取り除く
+ */
+function cleanLoadingUi(root: HTMLElement): void {
+	for (const node of root.querySelectorAll(".bg-surface-quaternary")) {
+		if (
+			node.closest(BODY_SELECTORS.join(", ")) ||
+			node.text.trim() ||
+			node.querySelector("img")
+		)
+			continue;
+		node.remove();
+	}
+	for (const node of root.querySelectorAll(".animate-pulse")) {
+		const aside = node.closest("aside");
+		if (aside && !aside.text.trim() && !aside.querySelector("img, a"))
+			aside.remove();
+	}
+	for (const heading of root.querySelectorAll("h2")) {
+		if (heading.text !== "あなたへのおすすめ") continue;
+		const section = heading.closest(".divide-y");
+		if (section && !section.querySelector("a")) section.parentNode?.remove();
 	}
 }
 
@@ -253,7 +441,10 @@ export async function captureHttpHtml(
 	detail: NoteDetail,
 	dir: string,
 ): Promise<string> {
-	const root = parse(await client.getText(articleUrl, "text/html"));
+	const root = parse(await client.getText(articleUrl, "text/html"), {
+		comment: true,
+	});
+	restoreStreamedContent(root);
 	const container = BODY_SELECTORS.map((selector) =>
 		root.querySelector(selector),
 	).find(Boolean);
