@@ -261,7 +261,27 @@ function replaceBody(container: HTMLElement, body: string): void {
 		const existing = key ? rendered.get(key) : undefined;
 		if (existing) figure.set_content(existing);
 	}
+	restoreAttachmentLayout(replacement);
 	container.set_content(replacement.toString());
+}
+
+/**
+ * SSR にない購入部分の添付ファイルも、既存 CSS の余白とファイル名表示を使う
+ */
+function restoreAttachmentLayout(root: HTMLElement): void {
+	for (const figure of root.querySelectorAll(
+		'[embedded-service="attachment"]',
+	)) {
+		if (figure.querySelector(".file-widget__link")) continue;
+		const link = figure.querySelector('a[href*="/attachments/download/"]');
+		if (!link) continue;
+		link.classList.add("file-widget__link");
+		link.querySelector("strong")?.classList.add("file-widget__filename");
+		const content = link.innerHTML;
+		link.set_content(
+			`<div class="file-widget__info"><div class="file-widget__data" style="white-space:pre-line">${content}</div></div>`,
+		);
+	}
 }
 
 /**

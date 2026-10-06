@@ -228,6 +228,26 @@ test("本文外の動かないボタンと空の固定バーだけを除去す�
 	expect(root.querySelector("#body-fixed")).not.toBeNull();
 });
 
+test("購入部分の添付ファイルのリンクと文字を維持し、表示用の構造を復元する", async () => {
+	const body =
+		'<figure embedded-service="attachment"><a href="https://note.com/api/v2/attachments/download/example"><strong>資料.pdf</strong> 1.12 MB\n\nダウンロード</a></figure>';
+	const html = await captureHttpHtml(
+		new NoteClient("test", 0),
+		new URL("/legacy", server.url).href,
+		{ ...detail, body },
+		dir,
+	);
+	const root = parse(html);
+	expect(root.querySelector(".file-widget__link")?.getAttribute("href")).toBe(
+		"https://note.com/api/v2/attachments/download/example",
+	);
+	expect(root.querySelector(".file-widget__filename")?.text).toBe("資料.pdf");
+	expect(root.querySelector(".file-widget__data")?.text).toBe(parse(body).text);
+	expect(root.querySelector(".file-widget__data")?.getAttribute("style")).toBe(
+		"white-space:pre-line",
+	);
+});
+
 test("未知のページ構造と空本文を成功として保存しない", async () => {
 	const client = new NoteClient("test", 0);
 	await expect(
